@@ -1,0 +1,18 @@
+services:
+  sheaf-d:
+    build: .
+    image: sheaf-d:latest
+    container_name: sheaf-d
+    restart: unless-stopped
+    ports:
+      # Only this computer can reach it. Change to "8080:8080" to share it on your network.
+      - "127.0.0.1:8080:8080"
+    environment:
+      MAX_UPLOAD_MB: "500"
+    # Uploads and results live in memory and vanish with the request.
+    tmpfs:
+      - /work:size=4g,uid=1000,gid=1000
+    # Chromium needs more shared memory than Docker gives by default.
+    shm_size: 1gb
+    security_opt:
+      - no-new-privileges:true
