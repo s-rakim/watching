@@ -1,0 +1,17 @@
+{
+  "name": "sheaf",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-hosted PDF toolkit. Every tool runs on your own machine.",
+  "workspaces": ["web", "server"],
+  "scripts": {
+    "dev": "concurrently -n server,web -c yellow,cyan \"npm run dev -w server\" \"npm run dev -w web\"",
+    "build": "npm run build -w web",
+    "start": "npm run start -w server",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w web",
+    "test": "npm run test -w server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
