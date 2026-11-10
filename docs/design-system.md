@@ -1,91 +1,109 @@
-# Riso: the design system for the PDF toolkit
+# Design system: the Nextcloud look
 
-This is the look for the app. The tokens live in [`design/tokens.css`](../design/tokens.css). Import that one file and everything below is available as CSS custom properties. Nothing here depends on a framework, so it works the same in React, Svelte, Vue or plain HTML.
+The app copies Nextcloud's interface. If you have used Nextcloud Files you already know the layout: a coloured backdrop, a slim header sitting on top of it, and one big rounded window that holds a navigation list on the left, the main content in the middle and a details sidebar on the right. We keep that structure and Nextcloud's quiet, neutral surfaces, and add our own colour on top: every family of PDF tools has its own accent.
 
-A live preview of every token and component sits in [`docs/design-preview.html`](design-preview.html). Open it in a browser, no build step needed.
+Everything lives in [`design/tokens.css`](../design/tokens.css). A clickable preview is in [`docs/design-preview.html`](design-preview.html), which you can open straight from disk.
 
-## The idea
+## Why Nextcloud's variable names
 
-Most PDF tools look the same: white page, one red or blue brand colour, grey cards with a faint shadow. The other common look is the one everyone now recognises from generated sites, with indigo-to-purple gradients, default Tailwind blue buttons and cards that glow. This system avoids both on purpose.
+The tokens use the exact names Nextcloud's theming app defines (`--color-main-background`, `--color-primary-element`, `--border-radius-element` and so on). That buys two things:
 
-The reference point is risograph printing. A riso print is warm off-white paper, dark ink, and a handful of loud flat inks laid down side by side. That maps neatly onto a PDF app:
+- If we ever want the real component library, `@nextcloud/vue`, it reads these same variables and will pick up our values with no glue code.
+- Anyone who has written CSS for a Nextcloud app can work on ours without learning a new vocabulary.
 
-- **Paper** is the background. Warm cream in light mode, warm charcoal in dark mode. Never pure white, never pure black, never cool slate.
-- **Ink** is text and the primary action. Primary buttons are solid ink, not a brand colour, which keeps the bright colours free to mean something.
-- **Seven inks**, one per family of tools. The colour tells you where you are. Merge and Split are tomato orange, the converters are jade and marigold, signing and protecting is sky blue, and so on.
-- **Soft, chunky shapes.** Big radii everywhere except the PDF pages themselves, which stay close to square because they represent paper. Hover states lift the element and show a solid offset shadow in the tool's colour, like a misregistered print. No glows, no blur halos, no gradients.
+The values come from Nextcloud's source (`apps/theming/lib/Themes/DefaultTheme.php` and `DarkTheme.php`). We changed three things on purpose:
 
-The choices come out of the ui-ux-pro-max guidance. For a productivity tool it points to flat design plus micro-interactions, fast 150ms feedback, keyboard shortcuts and clear functional colour. For "creative tools, fun-focused" products it suggests claymorphism with 16 to 24px radii and soft bounce easing. Riso takes the flat, fast, functional base from the first and borrows the roundness and the spring from the second, then drops the parts of claymorphism (pastel washes, inner shadows) that would make a work tool feel like a toy. Its rules on contrast, focus rings, 44px targets, reduced motion and colour-never-alone are followed throughout.
+1. **Rounder corners.** Stock Nextcloud uses 8px on controls and 16px on the window. We use 12px and 24px, with pill buttons.
+2. **Tool colours.** Stock Nextcloud is one blue. We keep that blue for primary actions and add seven family accents for tool icons, navigation dots, selection and progress.
+3. **Backdrop choice.** Nextcloud's default backdrop is a blue photo. We use a flat colour (it has to work offline) and let people pick from the family colours in settings.
 
-## Using it
+Nothing here uses Nextcloud's name or logo. The app has its own name and mark.
 
-```css
-@import "../design/tokens.css";
+## Layout
 
-body {
-  background: var(--paper);
-  color: var(--ink);
-  font: var(--weight-regular) var(--text-md) / var(--leading-body) var(--font-body);
-}
+```
++---------------------------------------------------------------------------+
+| [logo]  All tools  Recent  Workflows                 [search] [theme] [me] |  header, 50px, on the backdrop
+|  +---------------------------------------------------------------------+  |
+|  | NAVIGATION 300px  | CONTENT                         | SIDEBAR 300-500 |  |  the window: 8px from the edges,
+|  |                   |                                 |                 |  |  24px radius, main background
+|  | [+ Upload PDF]    |  All tools > Merge PDF  [grid]  |  Options        |  |
+|  |                   |                                 |  Details        |  |
+|  | o All tools       |  ( dropzone )                   |                 |  |
+|  | v Organize      6 |                                 |  [ options ]    |  |
+|  |     Merge PDF     |  [ ] name           pages  size |                 |  |
+|  |     Split PDF     |  [x] report.pdf        24  4 MB |                 |  |
+|  | > Optimize      3 |  [ ] scan.pdf          12  9 MB |                 |  |
+|  | > Convert to PDF  |                                 |                 |  |
+|  |   ...             |          [ Merge 2 files ]      |                 |  |
+|  |                   |                                 |                 |  |
+|  | Settings          |                                 |                 |  |
+|  +---------------------------------------------------------------------+  |
++---------------------------------------------------------------------------+
 ```
 
-Theme follows the OS. To give people a toggle, set `data-theme="light"` or `data-theme="dark"` on `<html>` and save their choice. Remove the attribute to go back to following the OS.
-
-Tool colour comes from a `data-category` attribute on any wrapper. Inside it, use the four `--accent-*` tokens and never the raw `--cat-*` ones:
-
-```html
-<main data-category="organize">  <!-- Merge PDF page -->
-  ...everything in here is tomato...
-</main>
-```
-
-| Token | Use it for |
-| --- | --- |
-| `--accent-fill` | Large colour areas: icon tiles, the dropzone border while dragging, progress bars, the selected tab |
-| `--accent-on` | Text and icons placed on top of `--accent-fill` |
-| `--accent-text` | Accent-coloured text, links and icons sitting on paper or surface |
-| `--accent-soft` | Tinted backgrounds: hover rows, selected page frames, badges |
-
-Outside any category, the accent falls back to ink, so shared screens (settings, the home page header) still look finished.
+- **Backdrop**: `--color-background-plain` fills the whole viewport. Header text and icons use `--color-background-plain-text`.
+- **Header**: `--header-height` (50px), transparent, sitting straight on the backdrop. Logo on the left, then the top-level sections as pill-shaped header items (`--header-menu-item-height`, `--border-radius-pill`). The active one gets a translucent white pill behind it. Search, theme toggle and the user menu on the right.
+- **Window**: the content container. Margin `--body-container-margin` (8px) on the left, right and bottom, radius `--body-container-radius` (24px), background `--color-main-background`, `--shadow-window`. Height `--body-height`. It never scrolls as a whole; the content area inside it does.
+- **Navigation**: `--navigation-width` (300px) on the left, inside the window. Background `--color-main-background-blur` with `--filter-background-blur`, so it looks very slightly frosted against the content, as in Nextcloud.
+- **Content**: everything else in the middle. A sticky breadcrumb bar at the top, then the page.
+- **Sidebar**: optional, on the right, between `--sidebar-min-width` and `--sidebar-max-width`. Opens when a tool has options or when a file is selected.
+- **Under 1024px** (`--breakpoint-mobile`): the navigation turns into an overlay that slides in from the left with a hamburger toggle in the breadcrumb bar, and the sidebar becomes a full-height overlay from the right. Both slide with `--animation-panel`.
 
 ## Colour
 
-### Paper and ink
+### Neutrals (Nextcloud defaults)
 
-| Token | Light | Dark | Role |
+| Token | Light | Dark | Use |
 | --- | --- | --- | --- |
-| `--paper` | `#FBF6EE` | `#15120E` | Page background |
-| `--surface` | `#FFFFFF` | `#1F1B16` | Cards, panels, dialogs |
-| `--surface-sunk` | `#F3ECE0` | `#100D0A` | Inputs, wells, the editor canvas behind pages |
-| `--surface-raised` | `#FFFFFF` | `#29241E` | Menus and popovers |
-| `--ink` | `#1F1A14` | `#F6EFE4` | Body text, primary buttons |
-| `--ink-muted` | `#62584C` | `#B3A796` | Secondary text and captions |
-| `--ink-faint` | `#8F8475` | `#7D7366` | Placeholders and disabled labels only |
-| `--line` | `#E4D9C7` | `#3A332A` | Card borders, hairlines |
-| `--line-strong` | `#CBBDA6` | `#544A3E` | Input borders and dividers that need to be seen |
-| `--on-ink` | `#FBF6EE` | `#15120E` | Text on an ink fill |
+| `--color-main-background` | `#FFFFFF` | `#171717` | Window, cards, sidebar |
+| `--color-background-hover` | `#F5F5F5` | `#212121` | Hovered rows and nav items |
+| `--color-background-dark` | `#EDEDED` | `#292929` | Wells, input backgrounds, page editor canvas |
+| `--color-background-darker` | `#DBDBDB` | `#3B3B3B` | Pressed states, scrollbars |
+| `--color-main-text` | `#222222` | `#EBEBEB` | Body text |
+| `--color-text-maxcontrast` | `#6B6B6B` | `#999999` | Secondary text. Nextcloud picked it to stay at 4.5:1 on hover backgrounds |
+| `--color-border` | `#EDEDED` | `#292929` | Hairlines |
+| `--color-border-dark` | `#DBDBDB` | `#3B3B3B` | Card and input borders |
+| `--color-border-maxcontrast` | `#7D7D7D` | `#7D7D7D` | Borders that must be visible (checkboxes, focused inputs), 3:1 or better |
 
-`--ink-faint` doesn't reach 4.5:1 and isn't meant to. Don't use it for anything a person has to read to get their work done.
+### Primary
+
+Nextcloud blue, used for the single main action on a screen, links, focus rings and selected checkboxes.
+
+| Token | Light | Dark |
+| --- | --- | --- |
+| `--color-primary-element` | `#00679E` | `#5AADEA` |
+| `--color-primary-element-text` | `#FFFFFF` | `#001B2B` |
+| `--color-primary-element-hover` | `#005A8A` | `#78BDEF` |
+| `--color-primary-element-light` | `#E5EFF5` | `#1C2B35` |
+| `--color-primary-element-light-text` | `#00507A` | `#A6D4F5` |
+
+The "light" pair is Nextcloud's secondary button and the active navigation item.
 
 ### Tool families
 
-Each family has a bright fill that carries dark text, a deeper "text" shade that is safe for small text on paper, and a soft tint. In dark mode the fill gets a touch lighter, the text shade becomes a pale tint and the soft background becomes a dark wash of the same hue.
+The family colour is what keeps this from feeling like a stock Nextcloud install. Use it for the tool icon tile, the dot next to a family in the navigation, selected rows and pages, progress bars and badges. Primary buttons stay blue, so the "do it" button is always in the same place and colour.
+
+Put `data-category` on the tool's wrapper and use the four `--accent-*` tokens inside it. Outside any family the accent falls back to the primary blue.
 
 | Family | `data-category` | Fill (light / dark) | Text (light / dark) | Soft (light / dark) |
 | --- | --- | --- | --- | --- |
-| Organize | `organize` | `#FF6B3D` / `#FF7A50` tomato | `#B83A12` / `#FFA07E` | `#FFE6DC` / `#3A2018` |
-| Optimize | `optimize` | `#8FD14F` / `#9EDB60` lime | `#3F7310` / `#B4E585` | `#E7F6D5` / `#24301A` |
-| Convert to PDF | `convert-to` | `#1FC7A6` / `#33D3B2` jade | `#00735E` / `#6FE3CA` | `#D3F5EC` / `#123129` |
-| Convert from PDF | `convert-from` | `#FFB31F` / `#FFBE3D` marigold | `#8A5200` / `#FFCF6E` | `#FFF0CC` / `#382A10` |
-| Edit | `edit` | `#FF5C9A` / `#FF73A8` bubblegum | `#B8135A` / `#FF9EC3` | `#FFE0EC` / `#3A1826` |
-| Security | `security` | `#36A9F2` / `#55B8F5` sky | `#0A62A0` / `#8DCFF8` | `#DAEFFD` / `#132A3A` |
-| Smart tools | `smart` | `#1F1A14` / `#F6EFE4` ink | `#1F1A14` / `#F6EFE4` | `#EDE5D8` / `#2A251F` |
+| Organize | `organize` | `#FF6B3D` / `#FF7A50` | `#B83A12` / `#FFA07E` | `#FFE6DC` / `#3A2018` |
+| Optimize | `optimize` | `#8FD14F` / `#9EDB60` | `#3F7310` / `#B4E585` | `#E7F6D5` / `#24301A` |
+| Convert to PDF | `convert-to` | `#1FC7A6` / `#33D3B2` | `#00735E` / `#6FE3CA` | `#D3F5EC` / `#123129` |
+| Convert from PDF | `convert-from` | `#FFB31F` / `#FFBE3D` | `#8A5200` / `#FFCF6E` | `#FFF0CC` / `#382A10` |
+| Edit | `edit` | `#FF5C9A` / `#FF73A8` | `#B8135A` / `#FF9EC3` | `#FFE0EC` / `#3A1826` |
+| Security | `security` | `#36A9F2` / `#55B8F5` | `#0A62A0` / `#8DCFF8` | `#DAEFFD` / `#132A3A` |
+| Smart tools | `smart` | `#222222` / `#EBEBEB` | same as fill | `#EDEDED` / `#292929` |
 
-Text on a fill is always ink-dark (`--accent-on`), in both themes. That is what makes the colours feel printed instead of neon: bright ink, dark type on top. White text on these fills would fail contrast on half of them anyway.
+| Token | Use |
+| --- | --- |
+| `--accent-fill` | Icon tiles, nav dots, progress fill, selected page ring |
+| `--accent-on` | Icon or text on top of the fill. Always dark, the bright fills are too light for white |
+| `--accent-text` | Accent-coloured text on the main background |
+| `--accent-soft` | Selected row background, badges, hover on tool cards |
 
-The smart family is plain ink on purpose. It covers the newer assistant style tools, and giving them a purple or a gradient would be exactly the look this system is trying to get away from. They get a small marigold spark in the icon instead.
-
-### Which tool goes where
+Which tool goes where:
 
 | Family | Tools |
 | --- | --- |
@@ -95,310 +113,195 @@ The smart family is plain ink on purpose. It covers the newer assistant style to
 | Convert from PDF | PDF to JPG, PDF to Word, PDF to PowerPoint, PDF to Excel, PDF to PDF/A |
 | Edit | Edit PDF, Rotate PDF, Add page numbers, Add watermark, Crop PDF |
 | Security | Unlock PDF, Protect PDF, Sign PDF, Redact PDF, Compare PDF |
-| Smart tools | Summarize PDF, Translate PDF, Workflows (chaining tools) |
+| Smart tools | Summarize PDF, Translate PDF, Workflows |
 
-If a new tool shows up, put it in the family whose verb fits best. Don't add an eighth colour without checking it against the other seven, because past seven the hues start to blur together.
+Nextcloud's own assistant styling uses a purple gradient. We deliberately don't copy that one: the smart tools are plain ink.
 
-### Status colours
+### Status
 
-| Token set | Light fill / text | Dark fill / text |
-| --- | --- | --- |
-| `--danger-*` | `#C9252B` / `#B0141C` (white text on fill) | `#FF5A5F` / `#FF8A8D` |
-| `--success-*` | `#2FB463` / `#17733A` | `#4CCB7E` / `#7FDDA3` |
-| `--warning-*` | `#FFB31F` / `#8A5200` | `#FFBE3D` / `#FFCF6E` |
+Straight from Nextcloud. Each comes as a pale background, a text colour for that background, and a strong "element" colour for icons and borders.
 
-Each has `-fill`, `-on`, `-text` and `-soft` like the families do. Status colour always comes with an icon and a word ("Failed", "Done"), never on its own. Danger red is deeper and cooler than the tomato used for Organize so a failed merge doesn't look like a normal merge.
+| | Background | Text | Element |
+| --- | --- | --- | --- |
+| Error | `--color-error` | `--color-error-text` | `--color-element-error` |
+| Warning | `--color-warning` | `--color-warning-text` | `--color-element-warning` |
+| Success | `--color-success` | `--color-success-text` | `--color-element-success` |
+| Info | `--color-info` | `--color-info-text` | `--color-element-info` |
+
+Always pair status colour with an icon and a word.
+
+### Backdrop
+
+Set `data-backdrop` on `<body>` from the user's settings. The choices are `blue` (default), `tomato`, `jade`, `marigold`, `pink`, `lime` and `ink`. Each sets `--color-background-plain` and the matching header text colour. Show them in settings as a row of round swatches, like Nextcloud's background picker.
+
+Nextcloud's own default blue `#0082C9` only reaches 4.2:1 against white header text, so our default is a touch deeper, `#0071AD` (5.3:1).
 
 ### Contrast
 
-Every pairing above has been checked against WCAG 2.2 AA: 4.5:1 for text, 7:1 for body text on paper and soft tints, 3:1 for the focus ring. All 104 combinations pass in both themes. The lowest is tomato `on` on `fill` in light mode at 6.1:1.
-
-Run the check yourself after changing any colour:
-
-```sh
-python3 design/check-contrast.py
-```
-
-It reads `tokens.css` directly and exits with an error if anything drops below the line, so it can go in CI.
+`python3 design/check-contrast.py` reads `tokens.css` and checks 93 pairings in light and dark, including every family colour and every backdrop. All pass WCAG 2.2 AA. It exits non-zero on a failure, so it can run in CI.
 
 ## Shape
 
-Generous radius is the main thing that makes this feel friendly. The rule is simple: the closer something is to a page of the user's document, the squarer it gets.
-
-| Token | Value | Use |
-| --- | --- | --- |
-| `--radius-page` | 6px | Rendered PDF page thumbnails |
-| `--radius-xs` | 8px | Checkboxes, page-number badges |
-| `--radius-sm` | 12px | Inputs, small buttons, menu items |
-| `--radius-md` | 16px | Icon tiles, toasts, popovers |
-| `--radius-lg` | 22px | Panels, sidebars, file rows |
-| `--radius-xl` | 28px | Tool cards, dialogs |
-| `--radius-2xl` | 36px | Dropzone, hero blocks |
-| `--radius-pill` | 999px | Buttons, toolbars, tabs, badges, segmented controls |
-
-When you nest rounded things, the inner radius should be the outer radius minus the padding between them. A 28px card with 12px padding holds a 16px tile.
-
-Borders are `--border-width` (1.5px) normally and `--border-width-thick` (2.5px) for the dropzone, the selected page and the chunky secondary button.
+| Token | Ours | Stock Nextcloud | Use |
+| --- | --- | --- | --- |
+| `--border-radius-page` | 4px | n/a | Rendered PDF pages |
+| `--border-radius-small` | 6px | 4px | Checkboxes, badges |
+| `--border-radius-element` | 12px | 8px | Inputs, nav items, file rows, menu items |
+| `--border-radius-container` | 16px | 12px | Menus, popovers, tool cards |
+| `--border-radius-container-large` | 24px | 16px | The window, modals, dropzone |
+| `--border-radius-rounded` | 28px | 28px | Large avatars, icon tiles on the done screen |
+| `--border-radius-pill` | 100px | 100px | Buttons, search field, chips, header items |
 
 ## Type
 
-| Role | Font | Why |
+Nextcloud uses the system font, which also means nothing to download for an offline install.
+
+| Token | Value | Use |
 | --- | --- | --- |
-| Display: logo, page titles, tool names on cards | Fredoka, weights 500 and 600 | Rounded terminals that match the radii. Only used at 18px and up so it never gets childish |
-| Body and UI | Plus Jakarta Sans, 400 to 700 | Friendly but plain enough for settings screens and long option lists |
-| Numbers: file sizes, page counts, compression % | JetBrains Mono, 500 | Tabular figures so numbers don't jiggle while a job runs |
+| `--font-face` | system-ui stack | Everything |
+| `--font-face-mono` | ui-monospace stack | File sizes, page counts, percentages |
+| `--default-font-size` | 15px | Body, list rows, buttons |
+| `--font-size-small` | 13px | Secondary text, counters, breadcrumbs on mobile |
+| `--font-size-large` | 18px | Sidebar title, card titles |
+| `--font-size-heading` | 22px | Heading at the top of a tool page |
+| `--font-size-display` | 30px | "All tools" heading and empty states |
+| `--font-weight-element` | 500 | Buttons, nav items |
+| `--font-weight-heading` | 600 | Headings |
+| `--default-line-height` | 1.5 | Everything |
 
-All three are open-licence Google fonts. The app is self-hosted and should work with no internet, so **ship the font files with the app** rather than linking to Google. Either install `@fontsource/fredoka`, `@fontsource/plus-jakarta-sans` and `@fontsource/jetbrains-mono`, or drop the woff2 files into a `fonts/` folder with `@font-face` rules and `font-display: swap`. The stacks fall back to the system UI font if the files are missing.
+Use tabular numbers (`font-variant-numeric: tabular-nums`) for sizes and counts so they don't jump while a job runs.
 
-Scale (1.25 ratio, 16px body):
+## Spacing and sizes
 
-| Token | Size | Use |
-| --- | --- | --- |
-| `--text-2xs` | 11px | Page numbers on thumbnails only |
-| `--text-xs` | 12px | Badges, file meta |
-| `--text-sm` | 14px | Secondary text, toolbar labels, card descriptions |
-| `--text-md` | 16px | Body, inputs, buttons |
-| `--text-lg` | 18px | Card titles, lead text |
-| `--text-xl` | 22px | Section titles, panel headings |
-| `--text-2xl` | 28px | Tool page title on phones |
-| `--text-3xl` | 36px | Tool page title |
-| `--text-4xl` | 40 to 60px, fluid | Home page headline |
+Everything is a multiple of `--default-grid-baseline` (4px). The common gaps are 4, 8, 12, 16 and 24px, written as `calc(var(--default-grid-baseline) * n)`.
 
-Line heights: `--leading-tight` (1.15) for display, `--leading-snug` (1.3) for card titles, `--leading-body` (1.55) for everything else. Display text gets `--tracking-display`. Small caps labels get `--tracking-caps`.
-
-## Spacing
-
-A 4px grid: `--space-1` is 4px, `--space-2` is 8px, up through `--space-24` at 96px. In practice most layouts only need 8, 12, 16, 24, 32 and 48.
-
-- Tool grid gap: `--space-4` on phones, `--space-6` from 768px.
-- Card padding: `--space-5` on phones, `--space-6` on desktop.
-- Between sections on the home page: `--space-16`.
-- Side gutters: `--page-gutter`, which runs from 16px on phones to 40px on wide screens.
-- Interactive things are at least `--tap-target` (44px) tall, with at least 8px between neighbours.
-
-## Elevation
-
-Shadows are tinted warm brown, so they read as a shadow on paper rather than a grey smudge. In dark mode they become plain black and do less work; borders carry more of the structure there.
-
-| Token | Use |
-| --- | --- |
-| `--shadow-xs` | Inputs, segmented controls |
-| `--shadow-sm` | Resting cards and file rows |
-| `--shadow-md` | Floating toolbar, sticky action bar |
-| `--shadow-lg` | Menus, popovers, dragged page |
-| `--shadow-xl` | Dialogs |
-| `--shadow-pop` | Hover and focus on tool cards: a solid 6px offset in the accent colour |
-| `--shadow-pop-sm` | Hover on small accent things |
-| `--shadow-pop-ink` | The chunky secondary button |
-
-`--shadow-pop` is the signature move. Use it on things you can pick, not on things that just sit there.
+- `--default-clickable-area` is 34px with a mouse, as in Nextcloud, and goes to 44px on touch screens.
+- `--clickable-area-large` (48px) is for the main action button and the dropzone's file button.
+- File rows are `--list-row-height` (50px).
 
 ## Motion
 
-| Token | Value | For |
-| --- | --- | --- |
-| `--duration-instant` | 90ms | Press feedback |
-| `--duration-fast` | 150ms | Hover, colour changes |
-| `--duration-base` | 220ms | Menus, toggles, card lift |
-| `--duration-slow` | 360ms | Dialogs, side panels, page reorder |
-| `--duration-slower` | 560ms | The file-landed moment, the job-done moment |
+Nextcloud moves very little, and that's part of its look.
 
-Easing: `--ease-out` for things arriving, `--ease-in` for things leaving (and make exits about two thirds the length of the entrance), `--ease-spring` for lifts and pops, `--ease-linear` only for progress bars and spinners.
-
-Rules that keep it lively without getting tiring:
-
-- Animate `transform` and `opacity` only. Never width, height, top or left.
-- One or two things move per interaction. A card lifts; its neighbours stay put.
-- Grids of tool cards can stagger in on first load, 30ms apart, max about 12 cards. After that everything appears at once.
-- Nothing blocks input. If someone clicks while a dialog is still opening, the click wins.
-- `prefers-reduced-motion` is handled in the tokens: durations drop to 1ms, the spring turns into a plain curve and lift/press amounts go to zero. Components get this for free as long as they use the tokens instead of hard-coded values.
+- `--animation-quick` (100ms): hover and colour changes.
+- `--animation-slow` (200ms): menus, toggles, checkbox ticks, card lift.
+- `--animation-panel` (300ms): the navigation and sidebar sliding in.
+- `--ease` for everything, `--ease-spring` only for the tool card lift.
+- Animate `transform` and `opacity` only. `prefers-reduced-motion` drops all durations to 1ms in the tokens.
 
 ## Components
 
-These describe the look and the behaviour. Class names are suggestions; the token names are the contract.
+Class names are suggestions. The tokens are the contract.
 
 ### Buttons
 
-Three kinds, all pill shaped, at least 44px tall, `--text-md` at weight 600.
+Pill shaped (`--border-radius-pill`), `--default-clickable-area` tall, `--font-weight-element`, horizontal padding 16px (12px with an icon).
 
-**Primary** is the one main action on a screen ("Merge PDF", "Download"). There should be one per screen.
+| Kind | Background | Text | For |
+| --- | --- | --- | --- |
+| Primary | `--color-primary-element` | `--color-primary-element-text` | The one main action: "Merge PDF", "Download" |
+| Secondary | `--color-primary-element-light` | `--color-primary-element-light-text` | "Add more files", "Choose files" |
+| Tertiary | transparent, `--color-background-hover` on hover | `--color-main-text` | Toolbar actions, "Cancel" |
+| Error | `--color-element-error` | white | Destructive actions, kept away from primary |
 
-```css
-.btn-primary {
-  min-height: 52px;
-  padding: 0 var(--space-8);
-  border-radius: var(--radius-pill);
-  background: var(--ink);
-  color: var(--on-ink);
-  box-shadow: var(--shadow-pop-sm);   /* the tool colour peeks out underneath */
-  transition: transform var(--duration-base) var(--ease-spring),
-              box-shadow var(--duration-base) var(--ease-spring);
-}
-.btn-primary:hover  { transform: translateY(var(--hover-lift)); box-shadow: var(--shadow-pop); }
-.btn-primary:active { transform: translateY(0) scale(var(--press-scale)); box-shadow: none;
-                      transition-duration: var(--duration-instant); }
-```
+Hover swaps to the matching `-hover` token. Focus: `outline: 2px solid var(--color-main-text); outline-offset: 2px` (Nextcloud uses the main text colour so the ring is visible on any background). Disabled is `opacity: 0.5` with `cursor: default`. Loading keeps the width, shows a spinner and sets `aria-busy`.
 
-**Accent** is for the actions inside a tool that carry its colour (add more files, apply to all pages). Fill `--accent-fill`, text `--accent-on`, same lift.
+### Navigation
 
-**Secondary** is the chunky outlined button: `--surface` background, `--border-width-thick` border in `--ink`, and `--shadow-pop-ink` on hover.
+Nextcloud's app navigation, with tool families as collapsible groups.
 
-**Ghost** is for toolbar and low-priority actions: no border, `--ink-muted` text, `--accent-soft` background on hover.
+- Padding 8px all round. Items are `--default-clickable-area` tall, `--border-radius-element`, icon (20px) then label then an optional counter.
+- Top: a primary "Upload PDF" button the full width of the list.
+- Then "All tools", "Recent", and one collapsible group per family. The group header has a 10px round dot in `--accent-fill` (set `data-category` on the group) and a chevron. Children are the tools.
+- Hover: `--color-background-hover`. Active: `--color-primary-element-light` with `--color-primary-element-light-text`, same as Nextcloud. Inside a family group the active item uses `--accent-soft` with `--color-main-text` and a 3px `--accent-fill` bar on the left edge, so you can see which family you're in.
+- Counters (number of tools, number of files in Recent) are small pills in `--color-background-dark` and `--font-size-small`.
+- Pinned to the bottom: "Settings", which opens the settings modal.
 
-**Danger** uses `--danger-fill` and `--danger-on` and is kept physically apart from the primary button, never next to it.
+### Breadcrumb bar
 
-All buttons:
+Sticky at the top of the content, 50px tall, `--color-main-background`, a `--color-border` line underneath once content scrolls under it.
 
-- Focus: `outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset);` Keep the outline, never remove it.
-- Loading: keep the width, swap the label for a spinner plus "Merging…", and set `aria-busy="true"` and `disabled`.
-- Disabled: `opacity: 0.45`, no shadow, no lift, `cursor: not-allowed`.
-- Icon-only buttons need an `aria-label` and a tooltip.
+- Left: navigation toggle (mobile only), then breadcrumbs: "All tools > Organize > Merge PDF". The last crumb is `--font-weight-heading`.
+- Right: view toggle (list/grid) as tertiary icon buttons, and a sidebar toggle.
 
-### Tool cards
+### All tools (home)
 
-The home page is a grid of these, grouped by family, with a filter row of pill tabs on top ("All", "Organize", "Optimize", "Convert", "Edit", "Security", "Smart").
-
-```
-+-----------------------------------------+   radius-xl, surface, line border
-|  [ tile ]                               |   tile: 56px, radius-md, accent-fill
-|                                         |         icon 28px in accent-on
-|  Merge PDF                              |   Fredoka 600, text-lg
-|  Combine several PDFs into one, in the  |   Jakarta 400, text-sm, ink-muted,
-|  order you want.                        |   two lines max
-+-----------------------------------------+
-```
-
-- Grid: `repeat(auto-fill, minmax(220px, 1fr))`, gap `--space-4` to `--space-6`.
-- Resting: `--surface`, `--border-width` in `--line`, `--shadow-sm`.
-- Hover and keyboard focus: lift by `--hover-lift`, border turns `--ink`, shadow becomes `--shadow-pop`. The coloured offset shadow appearing under the card is the moment of delight; don't add anything else.
-- Press: `scale(var(--press-scale))`.
-- The whole card is one link (`<a>`), so it is one tab stop and the full area is clickable.
-- Optional corner badge ("New", "Offline") as a pill in `--accent-soft` with `--accent-text`.
-- Icons: one outline set at 2px stroke with rounded caps, such as Lucide or Phosphor. No emoji.
+- Heading in `--font-size-display`, one line of muted copy, then a row of family filter chips (pills with the family dot).
+- A grid of tool cards: `repeat(auto-fill, minmax(220px, 1fr))`, gap 12px.
+- Tool card: `--border-radius-container`, `--color-main-background`, 1px `--color-border-dark` border, padding 16px. A 44px icon tile (`--border-radius-element`, `--accent-fill`, icon in `--accent-on`), the name at `--font-size-large` / 600, a two-line description in `--color-text-maxcontrast`.
+- Hover: background `--accent-soft`, border `--accent-fill`, lift 2px with `--ease-spring`, `--shadow-card-hover`. The whole card is one link.
 
 ### Dropzone
 
-The first thing on every tool page and the biggest object on it.
+Top of every tool page.
 
-```
-+=================================================+   radius-2xl
-:                                                 :   2.5px dashed line-strong
-:              [  big accent tile  ]              :   background surface
-:                                                 :
-:          Drop PDFs here or  [ Choose files ]    :   btn-primary
-:          Up to 200 MB each. Nothing leaves      :   text-sm, ink-muted
-:          this machine.                          :
-+=================================================+
-```
+- `--border-radius-container-large`, 2px dashed `--color-border-maxcontrast`, background `--color-background-hover`, min height 220px, centred content: family icon tile (64px, `--border-radius-rounded`), "Drop PDFs here", a secondary "Choose files" button (real file input behind a label) and a line of muted help text ("Up to 200 MB each, files stay on this server").
+- Dragging over: border goes solid `--accent-fill`, background `--accent-soft`. Count drag enter and leave so it doesn't flicker over child elements.
+- Rejected file: Nextcloud-style error note under it (`--color-error` background, `--color-error-text`), and the zone resets.
+- Paste from the clipboard works too. After files are added, the dropzone shrinks to a 56px bar ("Drop more files or choose") above the file list.
 
-- Minimum height 280px on desktop, 200px on phones.
-- **Idle**: dashed `--line-strong` border, `--surface` background. The accent tile sits in the middle with the tool icon.
-- **Dragging over**: border goes solid `--accent-fill`, background becomes `--accent-soft`, the tile scales up to 1.08 with `--ease-spring`, and the copy changes to "Let go to add 3 files". Use `dragenter` / `dragleave` with a counter so it doesn't flicker over child elements.
-- **File landed**: each file drops into a file row underneath with a short slide up (`--duration-slower`, `--ease-out`).
-- **Rejected** (wrong type, too big): border and copy in `--danger-text`, a one-line reason, and the zone resets after about 4 seconds.
-- The "Choose files" button is a real `<input type="file">` behind a label, so it works with the keyboard and screen readers. Dragging is never the only way in. Paste from the clipboard should work too.
-- Mention that processing is local. For a self-hosted tool that is the main reason to use it.
+### File list
 
-### File rows and the action bar
+This is Nextcloud Files' list, and it's where files wait before a tool runs.
 
-Once files are added, they show as rows (or a thumbnail grid for page tools).
+- Header row: select-all checkbox, "Name", "Pages", "Size", "Added". Header text is `--color-text-maxcontrast`, `--font-size-small`, sortable columns show an arrow and set `aria-sort`.
+- Rows: `--list-row-height` (50px), `--border-radius-element`, checkbox, a 32px first-page thumbnail (`--border-radius-page`), the name (wraps, never silently cut off), then mono numbers. A row actions menu ("…") on the right: preview, rotate, remove, move up/down.
+- Hover: `--color-background-hover`. Selected: `--accent-soft`, with the checkbox ticked in `--color-primary-element`.
+- Drag to reorder with a drag handle on hover; keyboard: Alt+Up / Alt+Down on a focused row.
+- The grid view toggle swaps rows for Nextcloud-style file tiles: a large thumbnail on a `--color-background-dark` tile (`--border-radius-container`) with the name under it.
+- Empty list: Nextcloud's empty content pattern, a large icon (64px) in `--color-text-maxcontrast`, a title and one line of help, centred.
 
-- Row: `--radius-lg`, `--surface`, `--shadow-sm`, 64px tall. First-page thumbnail at `--radius-page`, filename (wraps with `overflow-wrap: anywhere`, never cuts off silently), size and page count in `--font-mono`.
-- Drag handle on the left, remove button on the right. Reordering also works with keyboard: focus a row, then Alt+Up / Alt+Down.
-- A sticky action bar at the bottom of the viewport holds the tool's options summary and the one primary button. `--radius-pill` if it floats, `--shadow-md`, `--z-sticky`. Leave space below the content so the bar never covers the last row.
+### Action bar
+
+Sticky at the bottom of the content, 64px, `--color-main-background-translucent` with the blur filter and a `--color-border` line above. Left: a summary of the chosen options ("3 files, 41 pages, highest compression"). Right: the primary button at `--clickable-area-large`. Leave space under the list so the bar never covers the last row.
+
+### Sidebar (tool options)
+
+Nextcloud's app sidebar.
+
+- Header: the family icon tile, tool name at `--font-size-large`, a one-line description, and a close button.
+- Tabs underneath as a row of pill buttons: "Options" and "Details". Active tab uses the primary light pair.
+- Options are Nextcloud form controls: checkbox and radio rows (`--default-clickable-area` tall, the whole row clickable), text inputs (`--border-radius-element`, 2px `--color-border-maxcontrast` border, focused border `--color-main-text`), selects, and switches.
+- Where a tool has a small set of exclusive choices (compression level, page orientation), show them as option cards: `--border-radius-container`, border `--color-border-dark`, chosen card gets a 2px `--accent-fill` border, `--accent-soft` background and a tick.
+- Details tab shows file info for the selected file: page count, size, PDF version, encryption, a big preview.
 
 ### Progress and results
 
-- Progress bar: 10px tall, `--radius-pill`, track `--accent-soft`, fill `--accent-fill`, `--ease-linear`. Show a real percentage in mono next to it when the server reports one.
-- For jobs over a second, show what is happening in words ("Compressing page 12 of 40").
-- Done screen: the accent tile turns into a check with a single spring pop (`--duration-slower`), the result details in mono ("4.2 MB to 1.1 MB, 74% smaller"), a big Download primary button and a row of "Continue with" chips that hand the file to another tool. Those chips are pills tinted with the target tool's family colour, which is a nice way to show off the palette.
-- Errors say what went wrong and what to do ("This PDF is password protected. Unlock it first, or enter the password."), with a retry.
-
-### Toolbars
-
-Used in the page editor and in Edit PDF.
-
-- A floating pill: `--radius-pill`, `--surface-raised`, `--border-width` in `--line`, `--shadow-md`, height `--toolbar-height` (56px), `--z-toolbar`.
-- Groups of icon buttons separated by a 1px `--line` divider with `--space-2` either side.
-- Each button is 40px round, ghost style. The active tool is filled `--accent-fill` with `--accent-on` icon, so the active state is obvious at a glance and matches the tool family.
-- Every button has a tooltip with its name and shortcut ("Rotate, R").
-- On phones the toolbar docks to the bottom edge, full width, respecting the safe area, and scrolls sideways if it has to rather than shrinking icons below 40px.
+- While running, the file list rows get an inline progress bar (4px, `--border-radius-pill`, track `--color-background-dark`, fill `--accent-fill`) and a status line ("Compressing page 12 of 40").
+- Done: the content swaps to a centred result card (`--border-radius-container-large`): a large tick in an `--accent-fill` circle, the headline ("Your PDF is 74% smaller"), the numbers in mono, a primary "Download" button and a secondary "Save to Recent".
+- Under it, "Continue with" chips for other tools: pills with `--accent-soft` background and `--accent-text`, each scoped to the target tool's family, so the next step shows its colour.
+- Errors use Nextcloud's note card (`--color-error`, `--color-error-text`, an icon) with what happened, how to fix it, and a retry button.
 
 ### Page editor
 
-This is where Organize, Remove pages, Rotate, Extract, Split and the edit tools spend most of their time. It is a grid of page thumbnails on a sunk canvas.
+Used by Organize, Remove pages, Extract, Split, Rotate and the edit tools. It's the Files grid view applied to pages.
 
-```
-+-- header ------------------------------------------------------+
-| <- Back    report.pdf  ·  24 pages              [ Apply ]      |
-+----------------------------------------------------------------+
-|  canvas: surface-sunk                       | side panel       |
-|                                             | radius-lg        |
-|   +----+  +----+  +----+  +----+            | options for the  |
-|   |    |  |####|  |    |  |    |            | tool, e.g. split |
-|   |    |  |####|  |    |  |    |            | ranges           |
-|   +----+  +----+  +----+  +----+            |                  |
-|     1       2       3       4               |                  |
-|                                             |                  |
-|        ( floating pill toolbar )            |                  |
-+----------------------------------------------------------------+
-```
+- Content area background is `--color-background-dark` so the white pages stand out. Pages are always rendered white in both themes.
+- Page tile: the rendered page with `--border-radius-page` and `--shadow-card`, the page number under it in `--font-size-small` mono.
+- Hover: a small floating action pill on the page (rotate, delete, duplicate), 30px round tertiary buttons on `--color-main-background` with `--shadow-menu`.
+- Selected: a checkbox in the top-left corner like Files' grid view, plus a 3px `--accent-fill` ring offset 3px. Click selects, Shift+click selects a range, Ctrl/Cmd+click toggles, Ctrl/Cmd+A selects all. A selection bar replaces the breadcrumbs: "6 pages selected" with Rotate, Delete, Extract actions, like Files does when you select files.
+- Drag to reorder: the page lifts with `--shadow-card-hover`, a 4px `--accent-fill` pill marks the drop spot. Keyboard: Alt+Left / Alt+Right.
+- Split mode draws a dashed `--accent-fill` line between pages that you can toggle, and tints each resulting group with `--accent-soft` so you see the output files first.
+- Deleting shows Nextcloud's toast with "Undo" for about 7 seconds.
+- A zoom slider in the breadcrumb bar sets the tile size from 100 to 280px. Virtualise once a document passes about 60 pages.
 
-- Canvas is `--surface-sunk` so the white pages stand out. Pages are rendered white in both themes, because that is what the document actually looks like. Do not invert them in dark mode.
-- Page thumbnail: `--radius-page`, `--shadow-sm`, page number underneath in a small `--radius-xs` badge using `--text-2xs` mono.
-- Hover: `--shadow-md` and a small hover toolbar on the page itself (rotate, delete, duplicate), 32px round buttons on a `--surface-raised` pill.
-- Selected: 3px ring in `--accent-fill` offset 3px from the page, `--accent-soft` behind the number badge, and a check in the corner. Colour is never the only sign of selection.
-- Multi-select: click, Shift+click for ranges, Ctrl/Cmd+click to toggle, Ctrl/Cmd+A for all. Show a count in the header ("6 selected") in an `aria-live="polite"` region.
-- Dragging a page: it lifts with `--shadow-lg` and a slight 2deg tilt, the others slide out of the way with `--duration-slow` and `--ease-out`, and a 4px `--accent-fill` pill shows the insertion point. Keyboard alternative: Alt+Left / Alt+Right moves the focused page.
-- Rotated pages animate the turn (`--duration-base`, `--ease-spring`) so it's obvious which ones changed.
-- Deleted pages fade and shrink, and an "Undo" toast appears for about 5 seconds.
-- Split mode draws a dashed `--accent-fill` cut line between pages, which you can click to toggle, and tints each resulting group with alternating `--accent-soft` backgrounds so you can see the output files before you commit.
-- Zoom slider in the header changes the thumbnail size (100px to 280px wide). Virtualise the grid once a document passes about 60 pages.
-- The side panel is 320px (`--sidebar-width`), `--radius-lg`, `--surface`. On phones it becomes a bottom sheet with a grab handle and a 28px top radius.
+### Menus, modals, toasts
 
-### Inputs and options
-
-- Text inputs: 48px tall, `--radius-sm`, `--surface-sunk`, `--border-width` in `--line-strong`. On focus the border turns `--ink` and the focus ring appears. Labels always sit above the field, never as placeholder only.
-- Option choices (compression level, page size, orientation) are big selectable cards rather than dropdowns when there are five or fewer: `--radius-lg`, and when chosen a `--border-width-thick` border in `--accent-fill` with `--accent-soft` background and a check.
-- Segmented controls and tabs are pills, with the active segment in `--ink` and `--on-ink` text.
-- Toggles: 28px tall pill track, `--line-strong` when off, `--accent-fill` when on, with a spring on the thumb.
-
-### Header and navigation
-
-- 68px header (`--header-height`) on `--paper`, no bottom border until the page scrolls, then a `--line` hairline.
-- Logo set in Fredoka 600. A small mark made of three overlapping round squares in tomato, jade and marigold works well and reuses the palette.
-- A "Tools" menu opens a mega panel grouped by family, each group headed with a little coloured dot and the family name, so the colours are taught from the first click.
-- Theme toggle and settings on the right.
-- On the tool page, the header shows the tool's tile and name, and a back link to all tools.
-
-### Toasts and dialogs
-
-- Toasts: `--radius-md`, `--surface-raised`, `--shadow-lg`, bottom centre, a coloured status icon on the left. `role="status"`, gone after 4 to 5 seconds, never steal focus.
-- Dialogs: `--radius-xl`, `--shadow-xl`, max 480px wide, over `--scrim`. Open with a scale from 0.96 and fade (`--duration-slow`, `--ease-out`), close faster with `--ease-in`. Escape closes, focus is trapped inside and returns to the trigger on close. Ask before anything destructive, and offer undo instead where you can.
-
-### Empty, loading and offline
-
-- Skeletons for anything that takes over 300ms: `--surface-sunk` blocks with the real radii, gently pulsing between 60% and 100% opacity. No shimmer gradient.
-- Empty states get the family tile, one sentence and a button. Keep it short.
-- If the processing backend is down, say so in a banner at the top in `--warning-soft` with `--warning-text`.
-
-## Layout
-
-- Max content width `--container-max` (1240px), centred, with `--page-gutter` on the sides.
-- Breakpoints: 480, 768, 1024, 1440. Tool grid runs one column under 480, two to three on tablets, four to five on desktop.
-- The home page: a short headline in `--text-4xl` Fredoka, one line of copy, the filter pills, then the grid. No hero image. The colours of the cards are the hero.
-- Never let the page scroll sideways at 360px wide.
+- Action menus: `--border-radius-container`, `--color-main-background`, `--shadow-menu`, 4px padding, items `--default-clickable-area` tall with `--border-radius-element`.
+- Modals: `--border-radius-container-large`, `--shadow-modal`, over a dark translucent backdrop. Title, content, buttons bottom right with the primary last. Escape closes, focus is trapped and returned.
+- Toasts: bottom right, `--border-radius-container`, `--color-main-background`, `--shadow-menu`, a coloured status bar on the left edge. `role="status"`, gone after 7 seconds unless they hold an Undo.
+- Settings modal: Nextcloud's two-column settings dialog. Sections: Appearance (theme, backdrop swatches), Defaults per tool, Storage and cleanup, About.
 
 ## Don't
 
-- Don't use gradients, glows, glassy blur, neon or purple. If something feels flat, use a stronger accent fill or a pop shadow, not an effect.
-- Don't use grey shadows or cool grey neutrals. Everything neutral leans warm.
-- Don't put white text on the bright family fills. Dark ink on bright ink is the look.
-- Don't reach for raw hex values or `--cat-*` tokens in components. Use `--accent-*` so a component works in every family.
-- Don't use colour as the only signal for selection, status or family. Pair it with an icon, a check or a label.
-- Don't round the PDF pages themselves past `--radius-page`. They're paper.
+- Don't copy Nextcloud's name, logo or the assistant's purple gradient.
+- Don't use gradients or glows anywhere.
+- Don't put white text on the bright family fills.
+- Don't use `--cat-*` or raw hex in components. Use `--accent-*` or the Nextcloud tokens.
+- Don't use colour as the only sign of selection or status.
+- Don't round PDF pages beyond `--border-radius-page`.
 - Don't remove focus outlines.
 
 ## Changing things
 
-The whole palette is about forty lines at the top of `tokens.css`. To retune a family, change its four values in both the light block and the two dark blocks (they are duplicated so dark mode works whether it comes from the OS or the toggle), then run `python3 design/check-contrast.py`. The preview page picks the change up on refresh.
+Every colour is a hex value in `tokens.css`. Dark values appear twice (once for the OS setting, once for the manual toggle), so change both, then run `python3 design/check-contrast.py`.
