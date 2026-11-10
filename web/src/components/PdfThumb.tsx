@@ -16,7 +16,6 @@ export default function PdfThumb({ file, page = 1, width, rotation = 0, onInfo }
   const [visible, setVisible] = useState(false);
   const [ratio, setRatio] = useState(1.414);
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading');
-  const baseRotation = useRef<number | null>(null);
 
   useEffect(() => {
     const el = holder.current;
@@ -46,7 +45,6 @@ export default function PdfThumb({ file, page = 1, width, rotation = 0, onInfo }
         // Rendered once upright; extra turns are a CSS transform so they animate.
         const size = await renderPage(p, canvas.current, Math.max(width, 160));
         if (!alive) return;
-        baseRotation.current = p.rotate;
         setRatio(size.height / size.width);
         setState('ready');
       } catch {
@@ -62,39 +60,6 @@ export default function PdfThumb({ file, page = 1, width, rotation = 0, onInfo }
   const turned = rotation % 180 !== 0;
   const box = turned ? { width, height: width / ratio } : { width, height: width * ratio };
   const inner = turned ? { width: width / ratio, height: width } : box;
-
-  return () => io.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (!visible) return;
-    let alive = true;
-    (async () => {
-      try {
-        const doc = await openPdf(file);
-        onInfo?.(doc.numPages);
-        const p = await doc.getPage(page);
-        if (!alive || !canvas.current) return;
-        // Rendered once upright; extra turns are a CSS transform so they animate.
-        const size = await renderPage(p, canvas.current, Math.max(width, 160));
-        if (!alive) return;
-        baseRotation.current = p.rotate;
-        setRatio(size.height / size.width);
-        setState('ready');
-      } catch {
-        if (alive) setState('failed');
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, file, page]);
-
-  const turned = rotation % 180 !== 0;
-  const boxHeight = turned ? width / ratio : width * ratio;
-  const boxWidth = turned ? Math.min(width, width / ratio / ratio) : width;
-  const inner = turned ? { width: boxHeight, height: boxWidth } : { width: boxWidth, height: boxHeight };
 
   return (
     <div
