@@ -1,6 +1,6 @@
 import {
   PDFDocument, PDFName, PDFNumber, PDFRawStream, PDFArray, PDFDict,
-  StandardFonts, degrees, rgb, PageSizes,
+  StandardFonts, degrees, rgb, PageSizes, LineCapStyle, BlendMode,
 } from '@cantoo/pdf-lib';
 import {
   loadPdf, openForRender, closePdf, renderPage, canvasToBlob, blobBytes, baseName,
@@ -484,6 +484,18 @@ export async function applyOverlays(file, items, outName) {
         borderWidth: it.type === 'whiteout' || it.fill ? 0 : 2,
         opacity: it.opacity ?? 1,
       });
+    } else if (it.type === 'highlight') {
+      page.drawRectangle({ x: r.x, y: r.y, width: r.w, height: r.h, color: hexToRgb(it.color || '#ffe14d'), opacity: 0.45, blendMode: BlendMode.Multiply });
+    } else if (it.type === 'ink') {
+      const pts = it.points.map(([px, py]) => {
+        const q = toPdfRect(page, { x: it.x + px * it.w, y: it.y + py * it.h, w: 0, h: 0 });
+        return { x: q.x, y: q.y };
+      });
+      const thickness = it.width * r.viewH;
+      const color = hexToRgb(it.color || '#111827');
+      for (let k = 1; k < pts.length; k++) {
+        page.drawLine({ start: pts[k - 1], end: pts[k], thickness, color, lineCap: LineCapStyle.Round });
+      }
     } else if (it.type === 'image') {
       const img = it.mime === 'image/png' ? await doc.embedPng(it.bytes) : await doc.embedJpg(it.bytes);
       const pos = rotatedOrigin(r);

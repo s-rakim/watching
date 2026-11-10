@@ -9,7 +9,7 @@ PDF tools that run entirely in the browser. Nothing is uploaded: files are read,
 | Organize | Merge, Split, Remove pages, Extract pages, Organize, Scan to PDF |
 | Optimize | Compress, Repair |
 | Convert | JPG to PDF, PDF to JPG, PDF to Markdown / text |
-| Edit | Edit (text, images, shapes, white out), Rotate, Page numbers, Watermark, Crop |
+| Edit | Edit (change existing text, add text, images, shapes, drawing, highlights, white out), Rotate, Page numbers, Watermark, Crop |
 | Security | Sign, Protect (AES-256), Unlock, Redact, Compare |
 
 Every tool follows the same three steps: pick files, set options next to a live preview, download the result. Several outputs are packed into one zip.

@@ -13,12 +13,12 @@ const IMG = 'image/jpeg,image/png,image/webp,image/gif,image/bmp';
 
 export const TOOLS = [
   {
-    id: 'merge', title: 'Merge PDF', cat: 'organize', icon: 'merge', hue: 'teal',
+    id: 'merge', title: 'Merge PDF', cat: 'organize', icon: 'merge', hue: 'blue',
     desc: 'Join several PDFs into one. Drag the files into the order you want.',
     mode: 'files', accept: PDF, multiple: true, min: 2, sortable: true, action: 'Merge PDFs',
   },
   {
-    id: 'split', title: 'Split PDF', cat: 'organize', icon: 'split', hue: 'teal',
+    id: 'split', title: 'Split PDF', cat: 'organize', icon: 'split', hue: 'blue',
     desc: 'Cut a PDF into separate files by page range, or one file per page.',
     mode: 'pages', accept: PDF, action: 'Split PDF', select: 'none',
     fields: [
@@ -29,23 +29,23 @@ export const TOOLS = [
     ],
   },
   {
-    id: 'remove', title: 'Remove pages', cat: 'organize', icon: 'trash', hue: 'teal',
+    id: 'remove', title: 'Remove pages', cat: 'organize', icon: 'trash', hue: 'blue',
     desc: 'Pick the pages you no longer need and get a PDF without them.',
     mode: 'pages', accept: PDF, action: 'Remove pages', select: 'remove',
   },
   {
-    id: 'extract', title: 'Extract pages', cat: 'organize', icon: 'extract', hue: 'teal',
+    id: 'extract', title: 'Extract pages', cat: 'organize', icon: 'extract', hue: 'blue',
     desc: 'Pull the pages you choose into a new PDF.',
     mode: 'pages', accept: PDF, action: 'Extract pages', select: 'keep',
     fields: [{ key: 'separate', label: 'One PDF per selected page', type: 'checkbox', default: false }],
   },
   {
-    id: 'organize', title: 'Organize PDF', cat: 'organize', icon: 'layers', hue: 'teal',
+    id: 'organize', title: 'Organize PDF', cat: 'organize', icon: 'layers', hue: 'blue',
     desc: 'Reorder, rotate and delete pages. Add pages from other PDFs too.',
     mode: 'pages', accept: PDF, multiple: true, action: 'Save PDF', select: 'organize',
   },
   {
-    id: 'scan', title: 'Scan to PDF', cat: 'organize', icon: 'camera', hue: 'teal',
+    id: 'scan', title: 'Scan to PDF', cat: 'organize', icon: 'camera', hue: 'blue',
     desc: 'Photograph paper pages with your camera and turn them into a clean PDF.',
     mode: 'images', accept: IMG, multiple: true, capture: true, action: 'Create PDF',
     fields: [
@@ -55,7 +55,7 @@ export const TOOLS = [
     fixed: { margin: 'none', orientation: 'auto' },
   },
   {
-    id: 'compress', title: 'Compress PDF', cat: 'optimize', icon: 'compress', hue: 'green',
+    id: 'compress', title: 'Compress PDF', cat: 'optimize', icon: 'compress', hue: 'orange',
     desc: 'Shrink the file size by re-encoding the images inside. Text stays sharp.',
     mode: 'files', accept: PDF, multiple: true, action: 'Compress PDF',
     fields: [
@@ -67,7 +67,7 @@ export const TOOLS = [
     ],
   },
   {
-    id: 'repair', title: 'Repair PDF', cat: 'optimize', icon: 'wrench', hue: 'green',
+    id: 'repair', title: 'Repair PDF', cat: 'optimize', icon: 'wrench', hue: 'orange',
     desc: 'Rebuild a PDF that will not open properly and recover what can be saved.',
     mode: 'files', accept: PDF, multiple: true, action: 'Repair PDF', lenient: true,
   },
@@ -98,17 +98,17 @@ export const TOOLS = [
     fields: [{ key: 'format', label: 'Output', type: 'segmented', default: 'md', options: [['md', 'Markdown'], ['txt', 'Plain text']] }],
   },
   {
-    id: 'edit', title: 'Edit PDF', cat: 'edit', icon: 'edit', hue: 'violet',
-    desc: 'Add text, images and shapes on top of any page, or white out what is there.',
-    mode: 'canvas', accept: PDF, action: 'Save PDF', palette: ['text', 'image', 'rect', 'whiteout'],
+    id: 'edit', title: 'Edit PDF', cat: 'edit', icon: 'edit', hue: 'pink',
+    desc: 'Change the text already on a page, add new text, images and shapes, draw, highlight or white out.',
+    mode: 'canvas', accept: PDF, action: 'Save PDF', palette: ['edittext', 'text', 'image', 'ink', 'highlight', 'rect', 'whiteout'],
   },
   {
-    id: 'rotate', title: 'Rotate PDF', cat: 'edit', icon: 'rotate', hue: 'violet',
+    id: 'rotate', title: 'Rotate PDF', cat: 'edit', icon: 'rotate', hue: 'pink',
     desc: 'Turn pages the right way up. Works on several PDFs at once.',
     mode: 'files', accept: PDF, multiple: true, action: 'Rotate PDF', rotatable: true,
   },
   {
-    id: 'page-numbers', title: 'Page numbers', cat: 'edit', icon: 'hash', hue: 'violet',
+    id: 'page-numbers', title: 'Page numbers', cat: 'edit', icon: 'hash', hue: 'pink',
     desc: 'Number the pages. Choose where they sit, how they read and where they start.',
     mode: 'files', accept: PDF, action: 'Add page numbers',
     fields: [
@@ -122,7 +122,7 @@ export const TOOLS = [
     ],
   },
   {
-    id: 'watermark', title: 'Watermark', cat: 'edit', icon: 'drop', hue: 'violet',
+    id: 'watermark', title: 'Watermark', cat: 'edit', icon: 'drop', hue: 'pink',
     desc: 'Stamp text or an image across every page, as bold or as faint as you like.',
     mode: 'files', accept: PDF, action: 'Add watermark',
     fields: [
@@ -136,18 +136,18 @@ export const TOOLS = [
     ],
   },
   {
-    id: 'crop', title: 'Crop PDF', cat: 'edit', icon: 'crop', hue: 'violet',
+    id: 'crop', title: 'Crop PDF', cat: 'edit', icon: 'crop', hue: 'pink',
     desc: 'Trim the margins or keep just one area, on a single page or all of them.',
     mode: 'canvas', accept: PDF, action: 'Crop PDF', palette: ['crop'],
     fields: [{ key: 'scope', label: 'Apply to', type: 'segmented', default: 'all', options: [['all', 'All pages'], ['current', 'This page']] }],
   },
   {
-    id: 'sign', title: 'Sign PDF', cat: 'security', icon: 'sign', hue: 'blue',
+    id: 'sign', title: 'Sign PDF', cat: 'security', icon: 'sign', hue: 'sky',
     desc: 'Draw or type your signature and drop it where it belongs. Add the date too.',
     mode: 'canvas', accept: PDF, action: 'Sign PDF', palette: ['signature', 'date', 'text'],
   },
   {
-    id: 'protect', title: 'Protect PDF', cat: 'security', icon: 'lock', hue: 'blue',
+    id: 'protect', title: 'Protect PDF', cat: 'security', icon: 'lock', hue: 'sky',
     desc: 'Lock a PDF with a password using AES-256 encryption.',
     mode: 'files', accept: PDF, multiple: true, action: 'Protect PDF',
     fields: [
@@ -159,17 +159,17 @@ export const TOOLS = [
     ],
   },
   {
-    id: 'unlock', title: 'Unlock PDF', cat: 'security', icon: 'unlock', hue: 'blue',
+    id: 'unlock', title: 'Unlock PDF', cat: 'security', icon: 'unlock', hue: 'sky',
     desc: 'Remove the password from a PDF you have the password for.',
     mode: 'files', accept: PDF, multiple: true, action: 'Unlock PDF',
   },
   {
-    id: 'redact', title: 'Redact PDF', cat: 'security', icon: 'redact', hue: 'blue',
+    id: 'redact', title: 'Redact PDF', cat: 'security', icon: 'redact', hue: 'sky',
     desc: 'Black out sensitive details for good. The hidden content is removed, not just covered.',
     mode: 'canvas', accept: PDF, action: 'Redact PDF', palette: ['redact'],
   },
   {
-    id: 'compare', title: 'Compare PDF', cat: 'security', icon: 'compare', hue: 'blue',
+    id: 'compare', title: 'Compare PDF', cat: 'security', icon: 'compare', hue: 'sky',
     desc: 'Put two versions side by side and see which words were added or removed.',
     mode: 'compare', accept: PDF, multiple: true, min: 2, max: 2, action: 'Compare',
   },

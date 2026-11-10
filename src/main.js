@@ -190,7 +190,7 @@ function renderFields() {
     unlock: 'Locked files ask for their password when you add them. The saved copy opens without one.',
     repair: 'We will rebuild the file structure. If that fails, pages are recovered as images.',
     redact: 'Drag over anything you want gone. Redacted pages are flattened to images so the content cannot be recovered.',
-    edit: 'Pick a tool, then click or drag on the page.',
+    edit: 'Edit text is on to start: click any line on the page to retype it. The other tools add new things on top.',
     sign: 'Create your signature, then click where it should go.',
     crop: 'Drag the corners of the frame to choose what to keep.',
     compare: 'Removed words are marked on the left, added words on the right.',
