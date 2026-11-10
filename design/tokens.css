@@ -1,0 +1,350 @@
+/*
+ * Riso design tokens
+ * ------------------
+ * Warm paper, dark ink and seven bright print-ink accents, one per tool family.
+ * Import this once at the root of the app, before any component CSS:
+ *
+ *   @import "./design/tokens.css";
+ *
+ * Theme: follows the OS by default. Force a theme with
+ *   <html data-theme="light">  or  <html data-theme="dark">
+ *
+ * Tool colour: put data-category on any wrapper (a tool card, a tool page, the
+ * editor shell) and everything inside can use --accent, --accent-on,
+ * --accent-text and --accent-soft without knowing which tool it is.
+ *
+ *   <article class="tool-card" data-category="organize">...</article>
+ *
+ * Every colour pairing in here is checked by design/check-contrast.py.
+ * Run it after you touch a colour.
+ */
+
+/* ------------------------------------------------------------------ */
+/* 1. Light theme (default)                                           */
+/* ------------------------------------------------------------------ */
+:root {
+  color-scheme: light;
+
+  /* Paper and ink */
+  --paper: #fbf6ee;            /* page background */
+  --surface: #ffffff;          /* cards, panels, dialogs */
+  --surface-sunk: #f3ece0;     /* wells, inputs, editor canvas */
+  --surface-raised: #ffffff;   /* menus and popovers */
+  --ink: #1f1a14;              /* main text, primary buttons */
+  --ink-muted: #62584c;        /* secondary text, captions */
+  --ink-faint: #8f8475;        /* placeholders and disabled text only (not for body copy) */
+  --line: #e4d9c7;             /* hairlines and card borders */
+  --line-strong: #cbbda6;      /* input borders, dividers you need to see */
+  --on-ink: #fbf6ee;           /* text sitting on an --ink fill */
+  --scrim: rgb(31 26 20 / 0.45);
+
+  /* Tool family accents
+   * fill  = big colour areas (icon tiles, active tabs, progress bars)
+   * on    = text/icons placed on top of fill
+   * text  = accent-coloured text or icons on paper/surface
+   * soft  = tinted backgrounds (hover rows, selected pages, badges)
+   */
+  --cat-organize-fill: #ff6b3d;     --cat-organize-on: #1f1a14;
+  --cat-organize-text: #b83a12;     --cat-organize-soft: #ffe6dc;
+
+  --cat-optimize-fill: #8fd14f;     --cat-optimize-on: #1f1a14;
+  --cat-optimize-text: #3f7310;     --cat-optimize-soft: #e7f6d5;
+
+  --cat-convert-to-fill: #1fc7a6;   --cat-convert-to-on: #1f1a14;
+  --cat-convert-to-text: #00735e;   --cat-convert-to-soft: #d3f5ec;
+
+  --cat-convert-from-fill: #ffb31f; --cat-convert-from-on: #1f1a14;
+  --cat-convert-from-text: #8a5200; --cat-convert-from-soft: #fff0cc;
+
+  --cat-edit-fill: #ff5c9a;         --cat-edit-on: #1f1a14;
+  --cat-edit-text: #b8135a;         --cat-edit-soft: #ffe0ec;
+
+  --cat-security-fill: #36a9f2;     --cat-security-on: #1f1a14;
+  --cat-security-text: #0a62a0;     --cat-security-soft: #daeffd;
+
+  --cat-smart-fill: #1f1a14;        --cat-smart-on: #fbf6ee;
+  --cat-smart-text: #1f1a14;        --cat-smart-soft: #ede5d8;
+
+  /* Status. Always pair with an icon or a word, never colour alone. */
+  --danger-fill: #c9252b;   --danger-on: #ffffff;
+  --danger-text: #b0141c;   --danger-soft: #ffe1df;
+  --success-fill: #2fb463;  --success-on: #1f1a14;
+  --success-text: #17733a;  --success-soft: #ddf5e5;
+  --warning-fill: #ffb31f;  --warning-on: #1f1a14;
+  --warning-text: #8a5200;  --warning-soft: #fff0cc;
+
+  /* Focus ring: ink in light mode, paper in dark mode, offset from the element */
+  --focus-ring: #1f1a14;
+  --focus-ring-width: 3px;
+  --focus-ring-offset: 3px;
+
+  /* Shadows are tinted warm brown, never neutral grey, and never a glow. */
+  --shadow-color: 38 28 16;
+  --shadow-xs: 0 1px 2px rgb(var(--shadow-color) / 0.08);
+  --shadow-sm: 0 2px 6px rgb(var(--shadow-color) / 0.08), 0 1px 2px rgb(var(--shadow-color) / 0.06);
+  --shadow-md: 0 8px 20px -6px rgb(var(--shadow-color) / 0.16), 0 2px 6px rgb(var(--shadow-color) / 0.06);
+  --shadow-lg: 0 18px 40px -12px rgb(var(--shadow-color) / 0.22), 0 4px 10px rgb(var(--shadow-color) / 0.06);
+  --shadow-xl: 0 32px 64px -20px rgb(var(--shadow-color) / 0.30);
+  /* --shadow-pop and --shadow-pop-sm live in section 4 so they pick up
+     the accent of whichever category they are used in. */
+  --shadow-pop-ink: 0 5px 0 0 var(--ink);
+}
+
+/* ------------------------------------------------------------------ */
+/* 2. Dark theme                                                      */
+/*    Same values twice: once for "follow the OS", once for forced.   */
+/* ------------------------------------------------------------------ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #15120e;
+    --surface: #1f1b16;
+    --surface-sunk: #100d0a;
+    --surface-raised: #29241e;
+    --ink: #f6efe4;
+    --ink-muted: #b3a796;
+    --ink-faint: #7d7366;
+    --line: #3a332a;
+    --line-strong: #544a3e;
+    --on-ink: #15120e;
+    --scrim: rgb(0 0 0 / 0.6);
+
+    --cat-organize-fill: #ff7a50;     --cat-organize-on: #15120e;
+    --cat-organize-text: #ffa07e;     --cat-organize-soft: #3a2018;
+    --cat-optimize-fill: #9edb60;     --cat-optimize-on: #15120e;
+    --cat-optimize-text: #b4e585;     --cat-optimize-soft: #24301a;
+    --cat-convert-to-fill: #33d3b2;   --cat-convert-to-on: #15120e;
+    --cat-convert-to-text: #6fe3ca;   --cat-convert-to-soft: #123129;
+    --cat-convert-from-fill: #ffbe3d; --cat-convert-from-on: #15120e;
+    --cat-convert-from-text: #ffcf6e; --cat-convert-from-soft: #382a10;
+    --cat-edit-fill: #ff73a8;         --cat-edit-on: #15120e;
+    --cat-edit-text: #ff9ec3;         --cat-edit-soft: #3a1826;
+    --cat-security-fill: #55b8f5;     --cat-security-on: #15120e;
+    --cat-security-text: #8dcff8;     --cat-security-soft: #132a3a;
+    --cat-smart-fill: #f6efe4;        --cat-smart-on: #15120e;
+    --cat-smart-text: #f6efe4;        --cat-smart-soft: #2a251f;
+
+    --danger-fill: #ff5a5f;   --danger-on: #15120e;
+    --danger-text: #ff8a8d;   --danger-soft: #3a1717;
+    --success-fill: #4ccb7e;  --success-on: #15120e;
+    --success-text: #7fdda3;  --success-soft: #14301f;
+    --warning-fill: #ffbe3d;  --warning-on: #15120e;
+    --warning-text: #ffcf6e;  --warning-soft: #382a10;
+
+    --focus-ring: #f6efe4;
+    --shadow-color: 0 0 0;
+    --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-sm: 0 2px 6px rgb(0 0 0 / 0.35);
+    --shadow-md: 0 8px 20px -6px rgb(0 0 0 / 0.5);
+    --shadow-lg: 0 18px 40px -12px rgb(0 0 0 / 0.6);
+    --shadow-xl: 0 32px 64px -20px rgb(0 0 0 / 0.7);
+    --shadow-pop-ink: 0 5px 0 0 #000000;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #15120e;
+  --surface: #1f1b16;
+  --surface-sunk: #100d0a;
+  --surface-raised: #29241e;
+  --ink: #f6efe4;
+  --ink-muted: #b3a796;
+  --ink-faint: #7d7366;
+  --line: #3a332a;
+  --line-strong: #544a3e;
+  --on-ink: #15120e;
+  --scrim: rgb(0 0 0 / 0.6);
+
+  --cat-organize-fill: #ff7a50;     --cat-organize-on: #15120e;
+  --cat-organize-text: #ffa07e;     --cat-organize-soft: #3a2018;
+  --cat-optimize-fill: #9edb60;     --cat-optimize-on: #15120e;
+  --cat-optimize-text: #b4e585;     --cat-optimize-soft: #24301a;
+  --cat-convert-to-fill: #33d3b2;   --cat-convert-to-on: #15120e;
+  --cat-convert-to-text: #6fe3ca;   --cat-convert-to-soft: #123129;
+  --cat-convert-from-fill: #ffbe3d; --cat-convert-from-on: #15120e;
+  --cat-convert-from-text: #ffcf6e; --cat-convert-from-soft: #382a10;
+  --cat-edit-fill: #ff73a8;         --cat-edit-on: #15120e;
+  --cat-edit-text: #ff9ec3;         --cat-edit-soft: #3a1826;
+  --cat-security-fill: #55b8f5;     --cat-security-on: #15120e;
+  --cat-security-text: #8dcff8;     --cat-security-soft: #132a3a;
+  --cat-smart-fill: #f6efe4;        --cat-smart-on: #15120e;
+  --cat-smart-text: #f6efe4;        --cat-smart-soft: #2a251f;
+
+  --danger-fill: #ff5a5f;   --danger-on: #15120e;
+  --danger-text: #ff8a8d;   --danger-soft: #3a1717;
+  --success-fill: #4ccb7e;  --success-on: #15120e;
+  --success-text: #7fdda3;  --success-soft: #14301f;
+  --warning-fill: #ffbe3d;  --warning-on: #15120e;
+  --warning-text: #ffcf6e;  --warning-soft: #382a10;
+
+  --focus-ring: #f6efe4;
+  --shadow-color: 0 0 0;
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-sm: 0 2px 6px rgb(0 0 0 / 0.35);
+  --shadow-md: 0 8px 20px -6px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 18px 40px -12px rgb(0 0 0 / 0.6);
+  --shadow-xl: 0 32px 64px -20px rgb(0 0 0 / 0.7);
+  --shadow-pop-ink: 0 5px 0 0 #000000;
+}
+
+/* ------------------------------------------------------------------ */
+/* 3. Theme-independent tokens                                        */
+/* ------------------------------------------------------------------ */
+:root {
+  /* Accent defaults to ink so un-categorised screens still look right */
+  --accent-fill: var(--ink);
+  --accent-on: var(--on-ink);
+  --accent-text: var(--ink);
+  --accent-soft: var(--surface-sunk);
+
+  /* Radius. Deliberately generous. Pages of a PDF stay nearly square
+     because they represent paper; everything around them is soft. */
+  --radius-xs: 8px;     /* checkboxes, tiny chips, page-number badges */
+  --radius-sm: 12px;    /* inputs, small buttons, menu items */
+  --radius-md: 16px;    /* icon tiles, toasts, popovers */
+  --radius-lg: 22px;    /* panels, sidebars, file rows */
+  --radius-xl: 28px;    /* tool cards, dialogs */
+  --radius-2xl: 36px;   /* dropzone, hero blocks */
+  --radius-pill: 999px; /* buttons, toolbars, tabs, badges */
+  --radius-page: 6px;   /* rendered PDF page thumbnails */
+
+  /* Spacing: 4px base */
+  --space-0: 0;
+  --space-0-5: 2px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* Type. Fonts are self-hosted (the app runs offline), see the doc. */
+  --font-display: "Fredoka", "Nunito", ui-rounded, system-ui, sans-serif;
+  --font-body: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  /* Scale: 1.25 ratio around a 16px body */
+  --text-2xs: 0.6875rem; /* 11px  page numbers on thumbnails only */
+  --text-xs: 0.75rem;    /* 12px  badges, meta */
+  --text-sm: 0.875rem;   /* 14px  secondary text, toolbar labels */
+  --text-md: 1rem;       /* 16px  body */
+  --text-lg: 1.125rem;   /* 18px  lead text, card titles */
+  --text-xl: 1.375rem;   /* 22px  section titles */
+  --text-2xl: 1.75rem;   /* 28px  tool page title on mobile */
+  --text-3xl: 2.25rem;   /* 36px  tool page title */
+  --text-4xl: clamp(2.5rem, 1.6rem + 3.2vw, 3.75rem);  /* 40-60px home hero */
+
+  --leading-tight: 1.15;
+  --leading-snug: 1.3;
+  --leading-body: 1.55;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  --tracking-display: -0.01em;
+  --tracking-caps: 0.06em;
+
+  /* Motion */
+  --duration-instant: 90ms;   /* press feedback */
+  --duration-fast: 150ms;     /* hover, colour changes */
+  --duration-base: 220ms;     /* menus, toggles, card lift */
+  --duration-slow: 360ms;     /* dialogs, panels, page reorder */
+  --duration-slower: 560ms;   /* success moments, file landing in the dropzone */
+
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.5, 0, 0.75, 0);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);   /* small overshoot, use for lifts and pops */
+  --ease-linear: linear;                             /* progress bars and spinners only */
+
+  --press-scale: 0.97;
+  --hover-lift: -3px;
+
+  /* Borders */
+  --border-width: 1.5px;
+  --border-width-thick: 2.5px;  /* dropzone, selected page, chunky buttons */
+
+  /* Layout */
+  --container-max: 1240px;
+  --content-max: 720px;
+  --header-height: 68px;
+  --toolbar-height: 56px;
+  --sidebar-width: 320px;
+  --page-gutter: clamp(16px, 4vw, 40px);
+  --tap-target: 44px;
+
+  /* Stacking */
+  --z-base: 0;
+  --z-raised: 10;
+  --z-sticky: 100;
+  --z-toolbar: 200;
+  --z-dropdown: 400;
+  --z-overlay: 800;
+  --z-dialog: 900;
+  --z-toast: 1000;
+}
+
+/* ------------------------------------------------------------------ */
+/* 4. Category scopes                                                 */
+/* ------------------------------------------------------------------ */
+[data-category="organize"] {
+  --accent-fill: var(--cat-organize-fill);  --accent-on: var(--cat-organize-on);
+  --accent-text: var(--cat-organize-text);  --accent-soft: var(--cat-organize-soft);
+}
+[data-category="optimize"] {
+  --accent-fill: var(--cat-optimize-fill);  --accent-on: var(--cat-optimize-on);
+  --accent-text: var(--cat-optimize-text);  --accent-soft: var(--cat-optimize-soft);
+}
+[data-category="convert-to"] {
+  --accent-fill: var(--cat-convert-to-fill);  --accent-on: var(--cat-convert-to-on);
+  --accent-text: var(--cat-convert-to-text);  --accent-soft: var(--cat-convert-to-soft);
+}
+[data-category="convert-from"] {
+  --accent-fill: var(--cat-convert-from-fill);  --accent-on: var(--cat-convert-from-on);
+  --accent-text: var(--cat-convert-from-text);  --accent-soft: var(--cat-convert-from-soft);
+}
+[data-category="edit"] {
+  --accent-fill: var(--cat-edit-fill);  --accent-on: var(--cat-edit-on);
+  --accent-text: var(--cat-edit-text);  --accent-soft: var(--cat-edit-soft);
+}
+[data-category="security"] {
+  --accent-fill: var(--cat-security-fill);  --accent-on: var(--cat-security-on);
+  --accent-text: var(--cat-security-text);  --accent-soft: var(--cat-security-soft);
+}
+[data-category="smart"] {
+  --accent-fill: var(--cat-smart-fill);  --accent-on: var(--cat-smart-on);
+  --accent-text: var(--cat-smart-text);  --accent-soft: var(--cat-smart-soft);
+}
+
+/* The signature: a solid offset "print" shadow in the current accent.
+   Declared on every scope because a custom property that uses var()
+   resolves where it is declared, not where it is used. */
+:root,
+[data-category] {
+  --shadow-pop: 0 6px 0 0 var(--accent-fill);
+  --shadow-pop-sm: 0 3px 0 0 var(--accent-fill);
+}
+
+/* ------------------------------------------------------------------ */
+/* 5. Reduced motion                                                  */
+/* ------------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 1ms;
+    --duration-base: 1ms;
+    --duration-slow: 1ms;
+    --duration-slower: 1ms;
+    --ease-spring: var(--ease-standard);
+    --hover-lift: 0px;
+    --press-scale: 1;
+  }
+}
