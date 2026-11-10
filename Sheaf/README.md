@@ -1,6 +1,8 @@
 # Sheaf
 
-PDF tools that run entirely in the browser. Nothing is uploaded: files are read, changed and saved on the device.
+PDF tools that run entirely in the browser. Nothing is uploaded: files are read, changed and saved on the device. There's no server and no Docker, just a static site.
+
+For Word, Excel and PowerPoint conversions, OCR and the other tools that need real software behind them, use [Sheaf-D](../sheaf-D/), the Docker version.
 
 ## Tools
 
@@ -14,13 +16,29 @@ PDF tools that run entirely in the browser. Nothing is uploaded: files are read,
 
 Every tool follows the same three steps: pick files, set options next to a live preview, download the result. Several outputs are packed into one zip.
 
-## Run it
+## Setup
+
+You need Node 20 or newer.
 
 ```sh
+git clone https://github.com/s-rakim/watching.git
+cd watching/Sheaf
 npm install
-npm run dev      # http://localhost:5173
-npm run build    # static site in dist/
+npm run dev
 ```
+
+Then open <http://localhost:5173>. Edits reload in place.
+
+### Building it for hosting
+
+```sh
+npm run build      # writes the static site to dist/
+npm run preview    # serves dist/ on http://localhost:4173 to check it
+```
+
+Put the contents of `dist/` on any static host (Nginx, Caddy, GitHub Pages, Netlify and so on). It has to be served over HTTP: opening `dist/index.html` straight from disk (`file://`) won't work, because the browser blocks the module scripts and the pdf.js worker there. The build assumes it sits at the root of a domain; to host it under a sub-path, build with `npx vite build --base=/your/path/`.
+
+Scan to PDF uses the camera, which browsers only allow on `localhost` or over HTTPS.
 
 ## How it is put together
 
