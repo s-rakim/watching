@@ -209,7 +209,7 @@ export default function PagesWorkspace({ tool, items, pickMore, submit, reset, e
   const panel =
     mode === 'organize' ? (
       <>
-        <h2 className="panel-title">Arrange your pages</h2>
+        <h3 className="panel-title">Arrange your pages</h3>
         <p className="panel-note">Drag pages to reorder them. Hover a page to rotate, copy or delete it.</p>
         <div className="panel-actions">
           <button className="btn btn-accent" onClick={pickMore}>
@@ -234,7 +234,7 @@ export default function PagesWorkspace({ tool, items, pickMore, submit, reset, e
       </>
     ) : (
       <>
-        <h2 className="panel-title">{danger ? 'Pages to remove' : 'Pages to extract'}</h2>
+        <h3 className="panel-title">{danger ? 'Pages to remove' : 'Pages to extract'}</h3>
         <p className="panel-note">
           Click pages to {danger ? 'mark them for removal' : 'pick them'}. Shift-click selects everything in between.
         </p>
@@ -289,13 +289,11 @@ export default function PagesWorkspace({ tool, items, pickMore, submit, reset, e
         </label>
       }
       panel={panel}
+      hint={problem}
       action={
-        <>
-          {problem && <p className="panel-note">{problem}</p>}
-          <button className="btn btn-primary btn-lg btn-block" onClick={run} disabled={!!problem}>
-            {tool.action}
-          </button>
-        </>
+        <button className="btn btn-primary btn-lg" onClick={run} disabled={!!problem}>
+          {tool.action}
+        </button>
       }
     >
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>

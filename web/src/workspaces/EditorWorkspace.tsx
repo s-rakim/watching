@@ -813,7 +813,7 @@ export default function EditorWorkspace({ tool, items, submit, reset, error }: W
     <>
       {mode === 'sign' && (
         <>
-          <h2 className="panel-title">Sign this document</h2>
+          <h3 className="panel-title">Sign this document</h3>
           <div className="panel-actions">
             <button className="btn btn-accent" onClick={() => setSigning(true)}>
               <Signature size={18} strokeWidth={2.2} />
@@ -849,7 +849,7 @@ export default function EditorWorkspace({ tool, items, submit, reset, error }: W
 
       {mode === 'redact' && (
         <>
-          <h2 className="panel-title">Black out content</h2>
+          <h3 className="panel-title">Black out content</h3>
           <p className="panel-note">Drag a box over anything that should disappear, or search for a word to cover every place it shows up.</p>
           <form
             className="field"
@@ -887,7 +887,7 @@ export default function EditorWorkspace({ tool, items, submit, reset, error }: W
 
       {mode === 'edit' && (
         <>
-          <h2 className="panel-title">{sel ? 'Selected item' : 'Tool settings'}</h2>
+          <h3 className="panel-title">{sel ? 'Selected item' : 'Tool settings'}</h3>
           {!sel && active === 'select' && <p className="panel-note">Pick a tool from the bar, then click or drag on a page. Double-click text to change it.</p>}
         </>
       )}
@@ -1009,13 +1009,11 @@ export default function EditorWorkspace({ tool, items, submit, reset, error }: W
         error={error || loadError}
         toolbar={toolbar}
         panel={panel}
+        hint={problem}
         action={
-          <>
-            {problem && <p className="panel-note">{problem}</p>}
-            <button className="btn btn-primary btn-lg btn-block" onClick={save} disabled={!!problem || !doc}>
-              {tool.action}
-            </button>
-          </>
+          <button className="btn btn-primary btn-lg" onClick={save} disabled={!!problem || !doc}>
+            {tool.action}
+          </button>
         }
       >
         <div className={`ed-scroll${active === 'stamp' ? ' is-placing' : ''}`} ref={scroller}>

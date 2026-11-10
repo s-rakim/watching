@@ -159,7 +159,7 @@ export default function CompareWorkspace({ tool, items, setItems, reset, error }
       }
       panel={
         <>
-          <h2 className="panel-title">What changed</h2>
+          <h3 className="panel-title">What changed</h3>
           {!diffs && !loadError && <p className="panel-note">Reading both files…</p>}
           {diffs && !changed.length && (
             <p className="panel-note">
@@ -191,7 +191,7 @@ export default function CompareWorkspace({ tool, items, setItems, reset, error }
         </>
       }
       action={
-        <button className="btn btn-secondary btn-block" onClick={() => setItems((prev) => [prev[1], prev[0]])}>
+        <button className="btn btn-secondary" onClick={() => setItems((prev) => [prev[1], prev[0]])}>
           <ArrowLeftRight size={18} strokeWidth={2.2} />
           Swap sides
         </button>

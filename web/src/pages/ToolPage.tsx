@@ -7,11 +7,12 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ArrowDownAZ, ArrowLeft, CircleAlert, FileIcon, Plus, TriangleAlert, X } from 'lucide-react';
+import { ArrowDownAZ, CircleAlert, FileIcon, GripVertical, TriangleAlert, X } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { Crumbs } from '../App';
 import CameraPanel from '../components/CameraPanel';
 import Dropzone, { acceptAttr, sortFiles } from '../components/Dropzone';
 import OptionsForm from '../components/OptionsForm';
@@ -20,7 +21,7 @@ import ResultView from '../components/ResultView';
 import { Result, runTool } from '../lib/api';
 import { bytes, extOf, plural, uid } from '../lib/format';
 import { takeFiles, useStore } from '../lib/store';
-import { Options, ToolDef, toolById } from '../tools';
+import { CATEGORIES, Options, ToolDef, toolById } from '../tools';
 
 const PagesWorkspace = lazy(() => import('../workspaces/PagesWorkspace'));
 const EditorWorkspace = lazy(() => import('../workspaces/EditorWorkspace'));
@@ -50,7 +51,7 @@ type Stage = 'setup' | 'working' | 'done';
 
 const IMAGE_EXT = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'];
 
-function FileCard({ item, onRemove, sortable }: { item: Item; onRemove: () => void; sortable: boolean }) {
+function FileRow({ item, onRemove, sortable }: { item: Item; onRemove: () => void; sortable: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
     disabled: !sortable,
@@ -61,42 +62,34 @@ function FileCard({ item, onRemove, sortable }: { item: Item; onRemove: () => vo
   useEffect(() => () => void (url && URL.revokeObjectURL(url)), [url]);
 
   return (
-    <div
+    <li
       ref={setNodeRef}
-      className={`file-card${isDragging ? ' is-dragging' : ''}`}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      {...attributes}
-      {...listeners}
-      aria-label={`${item.file.name}${sortable ? '. Press space to pick up and move.' : ''}`}
+      className={`file-row${isDragging ? ' is-dragging' : ''}`}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
     >
-      <button
-        className="icon-btn icon-btn-sm file-card-remove"
-        aria-label={`Remove ${item.file.name}`}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={onRemove}
-      >
-        <X size={16} strokeWidth={2.4} />
-      </button>
-      <div className="file-card-preview">
+      {sortable ? (
+        <button className="file-grip" aria-label={`Move ${item.file.name}`} {...attributes} {...listeners}>
+          <GripVertical size={18} strokeWidth={2} />
+        </button>
+      ) : (
+        <span className="file-grip" />
+      )}
+      <span className="file-thumb">
         {ext === 'pdf' ? (
-          <PdfThumb file={item.file} width={132} onInfo={setPages} />
+          <PdfThumb file={item.file} width={30} onInfo={setPages} />
         ) : url ? (
           <img src={url} alt="" draggable={false} />
         ) : (
-          <span className="file-card-icon">
-            <FileIcon size={36} strokeWidth={1.6} />
-            <b>{ext.toUpperCase()}</b>
-          </span>
+          <FileIcon size={22} strokeWidth={1.6} />
         )}
-      </div>
-      <p className="file-card-name" title={item.file.name}>
-        {item.file.name}
-      </p>
-      <p className="file-card-meta mono">
-        {bytes(item.file.size)}
-        {pages ? ` · ${plural(pages, 'page')}` : ''}
-      </p>
-    </div>
+      </span>
+      <span className="file-name">{item.file.name}</span>
+      <span className="file-num mono">{pages ?? (ext === 'pdf' ? '' : ext.toUpperCase())}</span>
+      <span className="file-num mono">{bytes(item.file.size)}</span>
+      <button className="icon-btn" aria-label={`Remove ${item.file.name}`} title="Remove" onClick={onRemove}>
+        <X size={18} strokeWidth={2} />
+      </button>
+    </li>
   );
 }
 
@@ -105,12 +98,17 @@ export default function ToolPage() {
   const tool = toolById(toolId);
   if (!tool) {
     return (
-      <main id="main" className="container empty">
-        <h1>There&rsquo;s no tool at this address</h1>
-        <Link to="/" className="btn btn-primary">
-          See all tools
-        </Link>
-      </main>
+      <div className="content">
+        <Crumbs trail={[{ label: 'All tools', to: '/' }, { label: 'Not found' }]} />
+        <div className="content-scroll">
+          <div className="empty">
+            <h2>There&rsquo;s no tool at this address</h2>
+            <Link to="/" className="btn btn-primary">
+              See all tools
+            </Link>
+          </div>
+        </div>
+      </div>
     );
   }
   return <ToolRunner key={tool.id} tool={tool} />;
@@ -246,75 +244,27 @@ function ToolRunner({ tool }: { tool: ToolDef }) {
           : tool.workspace === 'compare'
             ? CompareWorkspace
             : null;
-  const inWorkspace = !!Workspace && stage === 'setup' && items.length >= (tool.minFiles ?? 1);
+  const inWorkspace = !!Workspace && items.length >= (tool.minFiles ?? 1);
 
-  return (
-    <main id="main" data-category={tool.category} className={`tool-page${inWorkspace ? ' tool-page-wide' : ''}`}>
-      {hiddenPicker}
-      {!inWorkspace && (
-        <div className="container tool-head">
-          <Link to="/" className="back-link">
-            <ArrowLeft size={16} strokeWidth={2.4} />
-            All tools
-          </Link>
-          <h1>{tool.name}</h1>
-          <p>{tool.blurb}</p>
-        </div>
-      )}
+  const family = CATEGORIES.find((c) => c.id === tool.category)!;
+  const trail = [{ label: 'All tools', to: '/' }, { label: family.name }, { label: tool.name }];
+  const setupOpen = stage === 'setup' && !inWorkspace && showSetup;
+  const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
 
-      {missing.length > 0 && stage === 'setup' && (
-        <div className="container">
-          <div className="notice notice-warning" role="alert">
-            <TriangleAlert size={20} strokeWidth={2} />
-            <span>
-              This tool needs {missing.join(' and ')} on the machine running Sheaf, and it isn&rsquo;t there. The Docker
-              image has everything; see the README if you run it another way.
-            </span>
-          </div>
-        </div>
-      )}
-
-      {stage === 'working' && (
-        <div className="container">
-          <div className="working" role="status" aria-live="polite">
-            <span className="tile tile-lg working-tile">
-              <tool.icon size={40} strokeWidth={2} />
-            </span>
-            <h2>
-              {progress !== null && progress < 1 ? 'Sending your files' : tool.working}
-              <span className="dots" aria-hidden="true" />
-            </h2>
-            <div className={`progress${progress === null ? ' is-indeterminate' : ''}`}>
-              <div className="progress-fill" style={progress === null ? undefined : { transform: `scaleX(${progress})` }} />
+  if (stage === 'setup' && Workspace && inWorkspace) {
+    return (
+      <div className="tool" data-category={tool.category}>
+        {hiddenPicker}
+        <Suspense
+          fallback={
+            <div className="content">
+              <Crumbs trail={trail} />
+              <div className="content-scroll">
+                <div className="loading-block" aria-busy="true" />
+              </div>
             </div>
-            <p className="mono working-pct">
-              {progress !== null ? `${Math.round(progress * 100)}%` : 'Working on this machine'}
-            </p>
-            {cancel.current && (
-              <button className="btn btn-ghost" onClick={() => cancel.current?.()}>
-                Cancel
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {stage === 'done' && result && (
-        <div className="container">
-          <ResultView tool={tool} result={result} onAgain={reset} />
-        </div>
-      )}
-
-      {stage === 'setup' && !inWorkspace && !showSetup && (
-        <div className="container">
-          <Dropzone tool={tool} onFiles={addFiles} maxMb={health?.maxUploadMb}>
-            {tool.camera && <CameraPanel onShots={addFiles} />}
-          </Dropzone>
-        </div>
-      )}
-
-      {stage === 'setup' && Workspace && inWorkspace && (
-        <Suspense fallback={<div className="container loading-block" aria-busy="true" />}>
+          }
+        >
           <Workspace
             tool={tool}
             items={items}
@@ -325,87 +275,169 @@ function ToolRunner({ tool }: { tool: ToolDef }) {
             error={error}
           />
         </Suspense>
-      )}
+      </div>
+    );
+  }
 
-      {stage === 'setup' && !inWorkspace && showSetup && (
-        <div className="container setup">
-          <section className="setup-files" aria-label="Your files">
-            {hasFiles ? (
+  return (
+    <div className="tool" data-category={tool.category}>
+      {hiddenPicker}
+      <div className="content">
+        <Crumbs trail={trail} />
+        <div className="content-scroll">
+          <div className="page page-tool">
+            {!setupOpen && stage === 'setup' && (
+              <div className="tool-head">
+                <span className="tile tile-lg">
+                  <tool.icon size={30} strokeWidth={1.8} />
+                </span>
+                <div>
+                  <h1>{tool.name}</h1>
+                  <p>{tool.blurb}</p>
+                </div>
+              </div>
+            )}
+
+            {missing.length > 0 && stage === 'setup' && (
+              <div className="note note-warning" role="alert">
+                <TriangleAlert size={20} strokeWidth={2} />
+                <span>
+                  This tool needs {missing.join(' and ')} on the machine running Sheaf, and it isn&rsquo;t there. The
+                  Docker image has everything; see the README if you run it another way.
+                </span>
+              </div>
+            )}
+
+            {stage === 'working' && (
+              <div className="working" role="status" aria-live="polite">
+                <span className="tile tile-xl working-tile">
+                  <tool.icon size={36} strokeWidth={1.8} />
+                </span>
+                <h2>
+                  {progress !== null && progress < 1 ? 'Sending your files' : tool.working}
+                  <span className="dots" aria-hidden="true" />
+                </h2>
+                <div className={`progress${progress === null ? ' is-indeterminate' : ''}`}>
+                  <div className="progress-fill" style={progress === null ? undefined : { transform: `scaleX(${progress})` }} />
+                </div>
+                <p className="mono muted">{progress !== null ? `${Math.round(progress * 100)}%` : 'Working on this machine'}</p>
+                {cancel.current && (
+                  <button className="btn btn-ghost" onClick={() => cancel.current?.()}>
+                    Cancel
+                  </button>
+                )}
+              </div>
+            )}
+
+            {stage === 'done' && result && <ResultView tool={tool} result={result} onAgain={reset} />}
+
+            {stage === 'setup' && (
+              <Dropzone tool={tool} onFiles={addFiles} maxMb={health?.maxUploadMb} compact={hasFiles}>
+                {tool.camera && <CameraPanel onShots={addFiles} compact={hasFiles} />}
+              </Dropzone>
+            )}
+
+            {setupOpen && hasFiles && (
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-                <SortableContext items={items.map((i) => i.id)} strategy={rectSortingStrategy}>
-                  <div className="file-grid">
-                    {items.map((item) => (
-                      <FileCard
-                        key={item.id}
-                        item={item}
-                        sortable={tool.multiple && items.length > 1}
-                        onRemove={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
-                      />
-                    ))}
-                    {(tool.multiple || !hasFiles) && (!tool.maxFiles || items.length < tool.maxFiles) && (
-                      <button className="file-add" onClick={() => picker.current?.click()}>
-                        <Plus size={28} strokeWidth={2.2} />
-                        Add more
-                      </button>
-                    )}
+                <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+                  <div className="file-list">
+                    <div className="file-row file-head">
+                      <span className="file-grip" />
+                      <span className="file-thumb" />
+                      <span className="file-name">Name</span>
+                      <span className="file-num">{tool.accept.includes('pdf') ? 'Pages' : 'Type'}</span>
+                      <span className="file-num">Size</span>
+                      {tool.multiple && items.length > 1 ? (
+                        <button
+                          className="icon-btn"
+                          aria-label="Sort by name"
+                          title="Sort by name"
+                          onClick={() =>
+                            setItems((prev) =>
+                              [...prev].sort((a, b) => a.file.name.localeCompare(b.file.name, undefined, { numeric: true })),
+                            )
+                          }
+                        >
+                          <ArrowDownAZ size={18} strokeWidth={2} />
+                        </button>
+                      ) : (
+                        <span className="icon-btn" />
+                      )}
+                    </div>
+                    <ul>
+                      {items.map((item) => (
+                        <FileRow
+                          key={item.id}
+                          item={item}
+                          sortable={tool.multiple && items.length > 1}
+                          onRemove={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
+                        />
+                      ))}
+                    </ul>
                   </div>
                 </SortableContext>
               </DndContext>
-            ) : (
-              <button className="file-add file-add-wide" onClick={() => picker.current?.click()}>
-                <Plus size={28} strokeWidth={2.2} />
-                Add {tool.noun}s instead
-              </button>
             )}
-            {tool.camera && <CameraPanel onShots={addFiles} compact />}
-            {tool.multiple && items.length > 1 && (
-              <div className="setup-tools">
-                <span className="setup-hint">Drag to change the order.</span>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={() =>
-                    setItems((prev) =>
-                      [...prev].sort((a, b) => a.file.name.localeCompare(b.file.name, undefined, { numeric: true })),
-                    )
-                  }
-                >
-                  <ArrowDownAZ size={18} strokeWidth={2} />
-                  Sort by name
-                </button>
-              </div>
-            )}
-          </section>
+          </div>
+        </div>
 
-          <aside className="panel">
-            <h2 className="panel-title">
-              <span className="tile tile-sm">
-                <tool.icon size={18} strokeWidth={2.2} />
-              </span>
-              {tool.name}
-            </h2>
-            {tool.fields?.length ? (
-              <OptionsForm fields={tool.fields} values={options} onChange={(patch) => { setError(''); setOptions((o) => ({ ...o, ...patch })); }} />
+        {setupOpen && (
+          <div className="action-bar">
+            {error ? (
+              <p className="note note-error" role="alert">
+                <CircleAlert size={18} strokeWidth={2} />
+                {error}
+              </p>
             ) : (
-              <p className="panel-note">
-                {tool.id === 'merge'
-                  ? 'Files are joined top to bottom in the order shown.'
-                  : 'No settings needed. Hit the button when you’re ready.'}
+              <p className="action-summary">
+                {hasFiles ? (
+                  <>
+                    <span className="mono">{plural(items.length, 'file')}</span>, <span className="mono">{bytes(totalBytes)}</span>
+                    {tool.multiple && items.length > 1 ? '. Drag the handles to reorder.' : ''}
+                  </>
+                ) : (
+                  'No files added'
+                )}
               </p>
             )}
-            <div className="panel-foot">
-              {error && (
-                <p className="form-error" role="alert">
-                  <CircleAlert size={18} strokeWidth={2.2} />
-                  {error}
-                </p>
-              )}
-              <button className="btn btn-primary btn-lg btn-block" onClick={run} disabled={missing.length > 0}>
-                {tool.action}
-              </button>
+            <button className="btn btn-primary btn-lg" onClick={run} disabled={missing.length > 0}>
+              {tool.action}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {setupOpen && (
+        <aside className="sidebar" aria-label={`${tool.name} options`}>
+          <div className="sidebar-head">
+            <span className="tile">
+              <tool.icon size={22} strokeWidth={1.8} />
+            </span>
+            <div>
+              <h2>{tool.name}</h2>
+              <p>{tool.blurb}</p>
             </div>
-          </aside>
-        </div>
+          </div>
+          <div className="sidebar-body">
+            {tool.fields?.length ? (
+              <OptionsForm
+                fields={tool.fields}
+                values={options}
+                onChange={(patch) => {
+                  setError('');
+                  setOptions((o) => ({ ...o, ...patch }));
+                }}
+              />
+            ) : (
+              <p className="muted">
+                {tool.id === 'merge'
+                  ? 'Files are joined top to bottom in the order shown. Drag the handles to change it.'
+                  : 'No settings needed. Hit the button when you\u2019re ready.'}
+              </p>
+            )}
+          </div>
+        </aside>
       )}
-    </main>
+    </div>
   );
 }

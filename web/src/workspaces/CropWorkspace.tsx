@@ -122,7 +122,7 @@ export default function CropWorkspace({ tool, items, submit, reset, error }: Wor
       }
       panel={
         <>
-          <h2 className="panel-title">Choose what to keep</h2>
+          <h3 className="panel-title">Choose what to keep</h3>
           <p className="panel-note">Drag the frame or its corners. Everything outside it is trimmed away.</p>
           <div className="field">
             <span className="field-label">Apply to</span>
@@ -150,7 +150,7 @@ export default function CropWorkspace({ tool, items, submit, reset, error }: Wor
       }
       action={
         <button
-          className="btn btn-primary btn-lg btn-block"
+          className="btn btn-primary btn-lg"
           disabled={!doc || whole}
           onClick={() =>
             submit({ kind: 'local', inputBytes: file.size, work: () => cropPdf(file, rect, scope === 'one' ? page - 1 : null) })

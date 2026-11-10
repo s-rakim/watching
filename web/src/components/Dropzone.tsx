@@ -20,9 +20,11 @@ interface Props {
   onFiles: (files: File[]) => void;
   maxMb?: number;
   children?: ReactNode;
+  /** Shrinks to a slim bar once files have been added. */
+  compact?: boolean;
 }
 
-export default function Dropzone({ tool, onFiles, maxMb, children }: Props) {
+export default function Dropzone({ tool, onFiles, maxMb, children, compact }: Props) {
   const [depth, setDepth] = useState(0);
   const [count, setCount] = useState(0);
   const [problem, setProblem] = useState('');
@@ -70,7 +72,7 @@ export default function Dropzone({ tool, onFiles, maxMb, children }: Props) {
 
   return (
     <div
-      className={`dropzone${dragging ? ' is-dragging' : ''}${problem ? ' is-rejected' : ''}`}
+      className={`dropzone${compact ? ' is-compact' : ''}${dragging ? ' is-dragging' : ''}${problem ? ' is-rejected' : ''}`}
       onDragEnter={(e) => {
         e.preventDefault();
         setDepth((d) => d + 1);
@@ -80,17 +82,19 @@ export default function Dropzone({ tool, onFiles, maxMb, children }: Props) {
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDrop}
     >
-      <span className="tile tile-lg">
-        <tool.icon size={40} strokeWidth={2} />
-      </span>
+      {!compact && (
+        <span className="tile tile-xl">
+          <tool.icon size={32} strokeWidth={1.8} />
+        </span>
+      )}
       {dragging ? (
         <p className="dropzone-title">Let go to add {count > 1 ? plural(count, 'file') : 'it'}</p>
       ) : (
         <>
-          <p className="dropzone-title">Drop {many} here</p>
-          <label className="btn btn-primary btn-lg">
-            <Plus size={20} strokeWidth={2.4} />
-            Choose {tool.multiple ? 'files' : 'a file'}
+          <p className="dropzone-title">{compact ? (tool.multiple ? 'Drop more files here' : 'Drop a different file here') : `Drop ${many} here`}</p>
+          <label className="btn btn-secondary">
+            <Plus size={18} strokeWidth={2} />
+            {compact && !tool.multiple ? 'Replace file' : `Choose ${tool.multiple ? 'files' : 'a file'}`}
             <input
               ref={input}
               type="file"
@@ -106,12 +110,14 @@ export default function Dropzone({ tool, onFiles, maxMb, children }: Props) {
         </>
       )}
       {children}
-      <p className={`dropzone-note${problem ? ' is-problem' : ''}`} role={problem ? 'alert' : undefined}>
-        {problem ||
-          (tool.local
-            ? 'This tool works right in your browser. Nothing leaves this machine.'
-            : `Up to ${maxMb ?? 500} MB each. Nothing leaves this machine.`)}
-      </p>
+      {(problem || !compact) && (
+        <p className={`dropzone-note${problem ? ' is-problem' : ''}`} role={problem ? 'alert' : undefined}>
+          {problem ||
+            (tool.local
+              ? 'This tool works right in your browser. Nothing leaves this machine.'
+              : `Up to ${maxMb ?? 500} MB each. Files stay on this server.`)}
+        </p>
+      )}
     </div>
   );
 }
