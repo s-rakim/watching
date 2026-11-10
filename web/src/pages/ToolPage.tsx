@@ -392,7 +392,7 @@ function ToolRunner({ tool }: { tool: ToolDef }) {
               <p className="action-summary">
                 {hasFiles ? (
                   <>
-                    <span className="mono">{plural(items.length, 'file')}</span>, <span className="mono">{bytes(totalBytes)}</span>
+                    {plural(items.length, 'file')}, {bytes(totalBytes)}
                     {tool.multiple && items.length > 1 ? '. Drag the handles to reorder.' : ''}
                   </>
                 ) : (

@@ -99,28 +99,32 @@ export default function CompareWorkspace({ tool, items, setItems, reset, error }
         const [da, db] = await Promise.all([openPdf(a), openPdf(b)]);
         if (!alive) return;
         setDocs([da, db]);
+        // Diff the whole document as one run of words, so text that only
+        // moved to the next page isn't reported as a change.
         const total = Math.max(da.numPages, db.numPages);
-        const all: PageDiff[] = [];
-        for (let i = 1; i <= total; i++) {
-          const [wa, wb] = await Promise.all([wordsOf(da, i), wordsOf(db, i)]);
-          const removed: Word[] = [];
-          const added: Word[] = [];
-          let ia = 0;
-          let ib = 0;
-          for (const part of diffArrays(wa.words.map((w) => w.text), wb.words.map((w) => w.text))) {
-            const n = part.value.length;
-            if (part.removed) {
-              removed.push(...wa.words.slice(ia, ia + n));
-              ia += n;
-            } else if (part.added) {
-              added.push(...wb.words.slice(ib, ib + n));
-              ib += n;
-            } else {
-              ia += n;
-              ib += n;
-            }
+        const all: PageDiff[] = Array.from({ length: total }, () => ({ removed: [], added: [] }));
+        const flat = async (doc: PDFDocumentProxy) => {
+          const out: { word: Word; page: number }[] = [];
+          for (let i = 1; i <= doc.numPages; i++) {
+            for (const word of (await wordsOf(doc, i)).words) out.push({ word, page: i - 1 });
           }
-          all.push({ removed, added });
+          return out;
+        };
+        const [wa, wb] = await Promise.all([flat(da), flat(db)]);
+        let ia = 0;
+        let ib = 0;
+        for (const part of diffArrays(wa.map((w) => w.word.text), wb.map((w) => w.word.text))) {
+          const n = part.value.length;
+          if (part.removed) {
+            for (const w of wa.slice(ia, ia + n)) all[w.page].removed.push(w.word);
+            ia += n;
+          } else if (part.added) {
+            for (const w of wb.slice(ib, ib + n)) all[w.page].added.push(w.word);
+            ib += n;
+          } else {
+            ia += n;
+            ib += n;
+          }
         }
         if (alive) setDiffs(all);
       } catch (err: any) {

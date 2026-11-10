@@ -366,7 +366,7 @@ a {
 .nav-scrim {
   display: none;
 }
-.nav-toggle {
+.icon-btn.nav-toggle {
   display: none;
 }
 @media (max-width: 1023px) {
@@ -391,7 +391,7 @@ a {
     z-index: calc(var(--z-navigation) - 1);
     background: rgba(0, 0, 0, 0.35);
   }
-  .nav-toggle {
+  .icon-btn.nav-toggle {
     display: inline-grid;
   }
 }
@@ -539,19 +539,30 @@ a {
 }
 
 @media (max-width: 1023px) {
+  /* One scrolling column: files, then options, with the action bar pinned below. */
   .tool {
     flex-direction: column;
     overflow-y: auto;
   }
   .tool > .content {
-    flex: none;
-    min-height: min(78vh, 100%);
+    display: contents;
   }
-  .tool > .content > .content-scroll {
+  .tool .crumbs {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+  }
+  .tool .content-scroll {
+    flex: none;
     overflow: visible;
   }
+  .tool .page {
+    padding-bottom: calc(var(--g) * 6);
+  }
   .sidebar {
+    order: 2;
     width: auto;
+    flex: none;
     border-left: 0;
     border-top: 1px solid var(--color-border);
     animation: none;
@@ -560,9 +571,11 @@ a {
     overflow: visible;
   }
   .action-bar {
+    order: 3;
     position: sticky;
     bottom: 0;
-    z-index: 5;
+    z-index: 6;
+    margin-top: auto;
   }
   .hide-narrow {
     display: none;
@@ -1004,7 +1017,9 @@ button.file-grip:hover {
   overflow: hidden;
   border-radius: var(--border-radius-page);
   background: #fff;
-  box-shadow: var(--shadow-card);
+  box-shadow:
+    0 0 0 1px var(--color-border-dark),
+    var(--shadow-card);
 }
 .thumb canvas {
   position: absolute;
@@ -1441,7 +1456,7 @@ input[type='color'] {
 .toasts {
   position: fixed;
   right: calc(var(--g) * 5);
-  bottom: calc(var(--g) * 5);
+  bottom: 88px;
   z-index: var(--z-toast);
   display: grid;
   gap: calc(var(--g) * 2);

@@ -9,7 +9,8 @@
 }
 @media (max-width: 1023px) {
   .canvas {
-    min-height: 62vh;
+    flex: none;
+    height: 68vh;
   }
 }
 .zoom {
