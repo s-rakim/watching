@@ -1,8 +1,8 @@
 services:
-  sheaf:
+  sheaf-d:
     build: .
-    image: sheaf:latest
-    container_name: sheaf
+    image: sheaf-d:latest
+    container_name: sheaf-d
     restart: unless-stopped
     ports:
       # Only this computer can reach it. Change to "8080:8080" to share it on your network.

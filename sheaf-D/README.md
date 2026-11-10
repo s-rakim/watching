@@ -1,16 +1,18 @@
-# Sheaf
+# Sheaf-D
 
 A PDF toolkit you host yourself. It does what the big online PDF sites do (merge, split, compress, convert, sign, edit and so on) but everything runs on your own machine, so your files never go anywhere.
 
+It's the full version of the toolkit: alongside the everyday tools it converts Word, Excel and PowerPoint, runs OCR, makes PDF/A and turns web pages into PDFs, because the container ships LibreOffice, Tesseract, Ghostscript and Chromium. If you only need what a browser can do on its own, [Sheaf](../Sheaf/) is lighter and needs no Docker.
+
 There are 29 tools. You pick one, drop your files in, set a few options, and download the result.
 
-## Run it
+## Setup
 
-You need Docker.
+You need Docker with Compose (Docker Desktop on Mac and Windows has both; on Linux install `docker-ce` and `docker-compose-plugin`).
 
 ```sh
 git clone https://github.com/s-rakim/watching.git
-cd watching
+cd watching/sheaf-D
 docker compose up -d --build
 ```
 
@@ -39,7 +41,7 @@ A few things worth knowing:
 - **Redact really removes things.** Pages with black boxes on them are rebuilt as images, so the text underneath is gone from the file, not just covered. Those pages lose their selectable text; run OCR afterwards if you want it back.
 - **Sign adds a visible signature**, drawn, typed or uploaded. It is not a certificate-based digital signature.
 - **Scan to PDF uses your camera**, which browsers only allow on `localhost` or over HTTPS.
-- **HTML to PDF fetches the address you give it** from the machine running Sheaf. That is the one tool that talks to the outside world, and only when you ask it to.
+- **HTML to PDF fetches the address you give it** from the machine running Sheaf-D. That is the one tool that talks to the outside world, and only when you ask it to.
 - **Uploads are deleted as soon as the result has been sent back.** In the Docker setup they only ever exist in memory.
 
 Two tools from the usual online suites are left out on purpose: translating and summarising PDFs both need a large language model, and that doesn't fit "runs on your machine with no outside calls".
@@ -121,4 +123,4 @@ Adding a server tool: write a function in `server/src/tools/` that takes the upl
 
 ## Credits
 
-Sheaf is glue around some excellent open source software: qpdf, Ghostscript, LibreOffice, OCRmyPDF, Tesseract, Poppler, Chromium, pdf.js, pdf-lib and pdf2docx. Each has its own licence. Ghostscript in particular is AGPL, which matters if you plan to offer this as a service to other people.
+Sheaf-D is glue around some excellent open source software: qpdf, Ghostscript, LibreOffice, OCRmyPDF, Tesseract, Poppler, Chromium, pdf.js, pdf-lib and pdf2docx. Each has its own licence. Ghostscript in particular is AGPL, which matters if you plan to offer this as a service to other people.

@@ -210,5 +210,5 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 app.listen(PORT, HOST, () => {
-  console.log(`Sheaf is running at http://localhost:${PORT}`);
+  console.log(`Sheaf-D is running at http://localhost:${PORT}`);
 });

@@ -313,9 +313,9 @@ export default function App() {
         Skip to content
       </a>
       <header className="header">
-        <Link to="/" className="logo" aria-label="Sheaf, all tools">
+        <Link to="/" className="logo" aria-label="Sheaf-D, all tools">
           <Logo />
-          <span>Sheaf</span>
+          <span>Sheaf-D</span>
         </Link>
         <NavLink to="/" end className="header-item">
           All tools
@@ -332,7 +332,7 @@ export default function App() {
           {online === false && (
             <div className="banner" role="alert">
               <WifiOff size={18} strokeWidth={2} />
-              The Sheaf server isn&rsquo;t answering. Tools that work in the browser still run; the rest need it back.
+              The Sheaf-D server isn&rsquo;t answering. Tools that work in the browser still run; the rest need it back.
             </div>
           )}
           <Routes>

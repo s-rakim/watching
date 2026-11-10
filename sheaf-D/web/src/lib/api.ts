@@ -67,7 +67,7 @@ export function runTool(
       if (e.lengthComputable) onProgress(e.loaded / e.total);
     };
     xhr.upload.onload = () => onProgress(null);
-    xhr.onerror = () => reject(new Error('Could not reach the Sheaf server. Is it still running?'));
+    xhr.onerror = () => reject(new Error('Could not reach the Sheaf-D server. Is it still running?'));
     xhr.onabort = () => reject(new DOMException('Cancelled', 'AbortError'));
     xhr.onload = async () => {
       const blob = xhr.response as Blob;

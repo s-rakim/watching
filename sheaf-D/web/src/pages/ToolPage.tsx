@@ -126,9 +126,9 @@ function ToolRunner({ tool }: { tool: ToolDef }) {
   const cancel = useRef<() => void>();
 
   useEffect(() => {
-    document.title = `${tool.name} · Sheaf`;
+    document.title = `${tool.name} · Sheaf-D`;
     return () => {
-      document.title = 'Sheaf · PDF tools on your own machine';
+      document.title = 'Sheaf-D · PDF tools on your own machine';
       cancel.current?.();
     };
   }, [tool]);
@@ -302,7 +302,7 @@ function ToolRunner({ tool }: { tool: ToolDef }) {
               <div className="note note-warning" role="alert">
                 <TriangleAlert size={20} strokeWidth={2} />
                 <span>
-                  This tool needs {missing.join(' and ')} on the machine running Sheaf, and it isn&rsquo;t there. The
+                  This tool needs {missing.join(' and ')} on the machine running Sheaf-D, and it isn&rsquo;t there. The
                   Docker image has everything; see the README if you run it another way.
                 </span>
               </div>

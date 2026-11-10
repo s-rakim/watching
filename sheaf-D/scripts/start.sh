@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Runs Sheaf without Docker. Needs Node 20+ and, for the full tool set,
+# Runs Sheaf-D without Docker. Needs Node 20+ and, for the full tool set,
 # the programs listed in the README.
 set -e
 cd "$(dirname "$0")/.."
