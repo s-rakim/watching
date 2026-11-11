@@ -210,12 +210,12 @@ export default function OptionsForm({ fields, values, onChange }: Props) {
           } else if (f.type === 'file') {
             const file = value as File | undefined;
             control = (
-              <label className="file-pick">
+              <label className="file-pick has-pick">
                 <ImagePlus size={20} strokeWidth={2} />
                 <span>{file ? file.name : 'Choose an image'}</span>
                 <input
                   type="file"
-                  className="sr-only"
+                  className="pick"
                   accept={f.accept}
                   onChange={(e) => set(e.target.files?.[0])}
                 />

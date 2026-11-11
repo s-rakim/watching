@@ -229,11 +229,12 @@ function ToolRunner({ tool }: { tool: ToolDef }) {
       tabIndex={-1}
       accept={acceptAttr(tool)}
       multiple={tool.multiple}
-      onChange={(e) => {
-        const { ok, bad } = sortFiles(tool, Array.from(e.target.files ?? []));
+      onChange={async (e) => {
+        const list = Array.from(e.target.files ?? []);
+        e.target.value = '';
+        const { ok, bad } = await sortFiles(tool, list);
         if (bad.length) toast(`${bad[0].name} isn’t a ${tool.noun}, so it was skipped.`, 'error');
         if (ok.length) addFiles(ok);
-        e.target.value = '';
       }}
     />
   );

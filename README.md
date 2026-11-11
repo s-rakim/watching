@@ -11,6 +11,35 @@ Two PDF toolkits that keep your files on your own machine. They share a look and
 
 Both work on Android, iPhone, iPad, Linux, macOS and Windows: touch-friendly layouts for phones and tablets, drag to reorder with a finger, and a home-screen icon if you want one. Sheaf also works offline once installed. The Sheaf-D image builds for Intel/AMD and ARM (Apple Silicon, Raspberry Pi). Each folder's README has a "Phones, tablets and computers" section with the details and the browser versions.
 
+## Quick setup
+
+Pick one. Both end up at http://localhost:8080.
+
+**Sheaf** (needs Node 20+):
+
+```sh
+git clone https://github.com/s-rakim/watching.git
+cd watching/Sheaf
+npm install
+npm run serve
+```
+
+**Sheaf-D** (needs Docker with Compose):
+
+```sh
+git clone https://github.com/s-rakim/watching.git
+cd watching/sheaf-D
+docker compose up -d --build
+```
+
+Optional extras:
+
+- **DeepL translation.** Get a free key at deepl.com/pro-api, put `DEEPL_AUTH_KEY=your-key` in a `.env` file inside `Sheaf/` or `sheaf-D/`, then restart. Without a key, translation uses the browser's translator (Sheaf) or Argos (Sheaf-D).
+- **Offline translation in Sheaf-D.** Rebuild with the languages you want: `TRANSLATE_LANGS="es fr de" docker compose up -d --build`.
+- **Other devices.** Install Tailscale on the host and run `tailscale serve --bg 8080`. See [Access over Tailscale](#access-over-tailscale).
+
+Installing without Docker, running at boot, HTTPS, every setting, and a fix-it list for common problems are in the [full guide](docs/guide.md).
+
 ## Sheaf (browser)
 
 You need Node 20 or newer.

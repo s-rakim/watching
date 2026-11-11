@@ -188,3 +188,5 @@ Adding a server tool: write a function in `server/src/tools/` that takes the upl
 ## Credits
 
 Sheaf-D is glue around some excellent open source software: qpdf, Ghostscript, LibreOffice, OCRmyPDF, Tesseract, Poppler, Chromium, pdf.js, pdf-lib, pdf2docx, DeepL's Python library and, if you turn it on, Argos Translate. Each has its own licence. Ghostscript in particular is AGPL, which matters if you plan to offer this as a service to other people.
+
+Full setup, serving and troubleshooting: [../docs/guide.md](../docs/guide.md).

@@ -3,7 +3,7 @@ import JSZip from 'jszip';
 import { TOOLS, CATEGORIES, byId } from './tools.js';
 import { icon } from './lib/icons.js';
 import { readBytes, openForRender, renderPage, formatBytes, parseRanges, baseName, loadPdf, canvasToBlob } from './lib/pdf.js';
-import { looksLikePdf, releaseCanvas, canShareFile, coarsePointer, isIOS, isStandalone } from './lib/device.js';
+import { looksLikePdf, pickerAccept, releaseCanvas, canShareFile, coarsePointer, isIOS, isStandalone } from './lib/device.js';
 import { installButton } from './pwa.js';
 import * as ops from './lib/ops.js';
 import * as conv from './lib/convert.js';
@@ -77,11 +77,11 @@ function openTool(tool) {
       <a class="back" href="#/">${icon('arrowLeft', 16)} All tools</a>
       <h1>${tool.title}</h1>
       <p>${tool.desc}</p>
-      <label class="btn btn-cta btn-xl">
+      <label class="btn btn-cta btn-xl has-pick">
         ${icon('upload', 22)} ${pickLabel(tool)}
-        <input type="file" class="sr" accept="${tool.accept}" ${tool.multiple ? 'multiple' : ''} />
+        <input type="file" class="pick" accept="${pickerAccept(tool.accept)}" ${tool.multiple ? 'multiple' : ''} />
       </label>
-      ${tool.capture ? `<label class="btn btn-ghost">${icon('camera', 18)} Use camera<input type="file" class="sr" accept="image/*" capture="environment" /></label>` : ''}
+      ${tool.capture ? `<label class="btn btn-ghost has-pick">${icon('camera', 18)} Use camera<input type="file" class="pick" accept="image/*" capture="environment" /></label>` : ''}
       <p class="hint">or drop ${tool.mode === 'images' ? 'images' : 'PDFs'} anywhere on this page</p>
     </section>`);
   document.querySelectorAll('.upload input[type=file]').forEach((inp) =>
@@ -259,8 +259,8 @@ function fieldHtml(f) {
 function addButton() {
   const { tool } = session;
   if (!tool.multiple || (tool.max && session.files.length >= tool.max)) return '';
-  return `<label class="add-more" title="Add more files">${icon('plus', 22)}<span class="sr">Add more files</span>
-    <input type="file" class="sr" accept="${tool.accept}" multiple /></label>`;
+  return `<label class="add-more has-pick" title="Add more files">${icon('plus', 22)}<span class="sr">Add more files</span>
+    <input type="file" class="pick" accept="${pickerAccept(tool.accept)}" multiple /></label>`;
 }
 
 function renderStage() {
