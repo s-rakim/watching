@@ -2,7 +2,9 @@ import './style.css';
 import JSZip from 'jszip';
 import { TOOLS, CATEGORIES, byId } from './tools.js';
 import { icon } from './lib/icons.js';
-import { readBytes, openForRender, renderPage, formatBytes, parseRanges, baseName, loadPdf } from './lib/pdf.js';
+import { readBytes, openForRender, renderPage, formatBytes, parseRanges, baseName, loadPdf, canvasToBlob } from './lib/pdf.js';
+import { looksLikePdf, releaseCanvas, canShareFile, coarsePointer, isIOS, isStandalone } from './lib/device.js';
+import { installButton } from './pwa.js';
 import * as ops from './lib/ops.js';
 import * as conv from './lib/convert.js';
 import { mountCanvasEditor } from './editor.js';
@@ -26,6 +28,7 @@ function shell(inner) {
         <a href="#/edit">Edit</a><a href="#/sign">Sign</a><a href="#/">All tools</a>
       </nav>
       <span class="private">${icon('shield', 16)} Files stay on your device</span>
+      ${installButton(icon)}
     </header>
     <main id="main">${inner}</main>
     <footer class="foot">Everything runs in your browser. Nothing is uploaded.</footer>`;
@@ -67,6 +70,7 @@ function home() {
 
 /* ------------------------------------------------------------ upload step */
 function openTool(tool) {
+  clearThumbs();
   session = { tool, files: [], opts: defaults(tool), pages: [], selected: new Set() };
   shell(`
     <section class="upload hue-${tool.hue}">
@@ -81,7 +85,7 @@ function openTool(tool) {
       <p class="hint">or drop ${tool.mode === 'images' ? 'images' : 'PDFs'} anywhere on this page</p>
     </section>`);
   document.querySelectorAll('.upload input[type=file]').forEach((inp) =>
-    inp.addEventListener('change', () => addFiles([...inp.files])));
+    inp.addEventListener('change', () => { const list = [...inp.files]; inp.value = ''; addFiles(list); }));
 }
 
 const pickLabel = (t) => t.mode === 'images' ? 'Select images' : t.multiple ? 'Select PDF files' : 'Select PDF file';
@@ -92,9 +96,9 @@ function defaults(tool) {
   return o;
 }
 
-function matches(file, tool) {
+async function matches(file, tool) {
   if (tool.mode === 'images') return file.type.startsWith('image/');
-  return file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+  return looksLikePdf(file).catch(() => false);
 }
 
 function askPassword(name, wrong) {
@@ -137,7 +141,8 @@ async function openPdfFile(file) {
 async function addFiles(list) {
   if (!session) return;
   const { tool } = session;
-  const ok = list.filter((f) => matches(f, tool));
+  const fits = await Promise.all(list.map((f) => matches(f, tool)));
+  const ok = list.filter((_, i) => fits[i]);
   if (!ok.length) return toast(tool.mode === 'images' ? 'Those are not image files.' : 'Please choose PDF files.');
   const firstBatch = session.files.length === 0;
   if (firstBatch) app.querySelector('.upload')?.classList.add('busy');
@@ -183,10 +188,10 @@ function renderFields() {
   const body = $('.panel-body');
   const fields = (tool.fields || []).filter((f) => !f.when || f.when(opts));
   const intro = {
-    merge: 'Drag the files to set the order. Add more with the plus button.',
-    remove: 'Click the pages you want to delete.',
-    extract: 'Click the pages you want to keep.',
-    organize: 'Drag pages to reorder them. Use the buttons on each page to rotate or delete.',
+    merge: `${coarsePointer() ? 'Press and hold a file, then drag it' : 'Drag the files'} to set the order. Add more with the plus button.`,
+    remove: `${coarsePointer() ? 'Tap' : 'Click'} the pages you want to delete.`,
+    extract: `${coarsePointer() ? 'Tap' : 'Click'} the pages you want to keep.`,
+    organize: `${coarsePointer() ? 'Press and hold a page, then drag it' : 'Drag pages'} to reorder them. Use the buttons on each page to rotate or delete.`,
     rotate: 'Rotate everything at once, or turn single files with the button on each one.',
     unlock: 'Locked files ask for their password when you add them. The saved copy opens without one.',
     repair: 'We will rebuild the file structure. If that fails, pages are recovered as images.',
@@ -270,7 +275,7 @@ function renderStage() {
   if (tool.mode === 'pages') return renderPages(stage);
 
   stage.innerHTML = `<div class="tiles">${session.files.map((f, i) => `
-    <figure class="tile" draggable="${tool.sortable || tool.mode === 'images'}" data-i="${i}">
+    <figure class="tile" data-i="${i}">
       <div class="thumb" data-thumb="${f.id}">${f.url ? `<img src="${f.url}" alt="" />` : f.broken ? icon('wrench', 32) : ''}</div>
       <figcaption title="${esc(f.name)}">${esc(f.name)}</figcaption>
       <small>${f.pageCount != null && !f.broken ? `${f.pageCount} page${f.pageCount === 1 ? '' : 's'} · ` : ''}${formatBytes(f.size)}${f.locked ? ' · locked' : ''}</small>
@@ -279,7 +284,8 @@ function renderStage() {
         <button data-act="del" title="Remove" aria-label="Remove ${esc(f.name)}">${icon('x', 16)}</button>
       </div>
     </figure>`).join('')}</div>${addButton()}`;
-  session.files.forEach((f) => { if (f.pdf) thumb(f.pdf, 1, $(`[data-thumb="${f.id}"]`, stage), f.rotation); });
+  resetThumbs();
+  session.files.forEach((f) => { if (f.pdf) thumb(f.pdf, 1, $(`[data-thumb="${f.id}"]`, stage), f.rotation, f.id); });
   stage.onclick = (e) => {
     const b = e.target.closest('[data-act]');
     if (!b) return;
@@ -290,42 +296,146 @@ function renderStage() {
     } else session.files[i].rotation = (session.files[i].rotation + 90) % 360;
     renderStage();
   };
-  sortable(stage, '.tile', (from, to) => { const [m] = session.files.splice(from, 1); session.files.splice(to, 0, m); renderStage(); });
+  if (tool.sortable || tool.mode === 'images') sortable(stage, '.tile', (from, to) => { const [m] = session.files.splice(from, 1); session.files.splice(to, 0, m); renderStage(); });
   wireAdd(stage);
 }
 
 function wireAdd(stage) {
-  $('.add-more input', stage)?.addEventListener('change', (e) => addFiles([...e.target.files]));
+  $('.add-more input', stage)?.addEventListener('change', (e) => { const list = [...e.target.files]; e.target.value = ''; addFiles(list); });
 }
 
+/*
+ * Thumbnails render only once they scroll near the screen, one at a time, and are kept
+ * as small JPEGs instead of live canvases. A 300 page PDF would otherwise hold hundreds
+ * of canvases at once, which is more memory than iOS gives a tab.
+ */
 const thumbQueue = [];
+const thumbCache = new Map(); // "file:page:rotation" -> object URL
 let thumbBusy = false;
-function thumb(pdf, n, holder, rotation = 0) {
+let thumbIO = null;
+
+function clearThumbs() {
+  resetThumbs();
+  thumbCache.forEach((url) => URL.revokeObjectURL(url));
+  thumbCache.clear();
+}
+function resetThumbs() {
+  thumbIO?.disconnect();
+  thumbQueue.length = 0;
+}
+function thumbImg(url) {
+  return Object.assign(document.createElement('img'), { src: url, alt: '', draggable: false, decoding: 'async' });
+}
+function thumb(pdf, n, holder, rotation = 0, fileId = 0) {
   if (!holder) return;
-  thumbQueue.push({ pdf, n, holder, rotation });
-  if (!thumbBusy) drain();
+  const key = `${fileId}:${n}:${rotation}`;
+  const hit = thumbCache.get(key);
+  if (hit) return holder.replaceChildren(thumbImg(hit));
+  holder.thumbJob = { pdf, n, rotation, key };
+  thumbIO ||= new IntersectionObserver((entries) => {
+    for (const en of entries) if (en.isIntersecting) { thumbIO.unobserve(en.target); thumbQueue.push(en.target); }
+    if (!thumbBusy) drain();
+  }, { rootMargin: '800px 0px' });
+  thumbIO.observe(holder);
 }
 async function drain() {
   thumbBusy = true;
   while (thumbQueue.length) {
-    const { pdf, n, holder, rotation } = thumbQueue.shift();
-    if (!holder.isConnected) continue;
-    try { holder.replaceChildren(await renderPage(pdf, n, { maxWidth: 260, rotation })); } catch { /* leave blank */ }
+    const holder = thumbQueue.shift();
+    const job = holder.thumbJob;
+    if (!holder.isConnected || !job) continue;
+    let url = thumbCache.get(job.key);
+    if (!url) {
+      try {
+        const c = await renderPage(job.pdf, job.n, { maxWidth: 160 * Math.min(window.devicePixelRatio || 1, 2), rotation: job.rotation });
+        const blob = await canvasToBlob(c, 'image/jpeg', 0.82);
+        releaseCanvas(c);
+        url = URL.createObjectURL(blob);
+        thumbCache.set(job.key, url);
+      } catch { continue; /* leave blank */ }
+    }
+    if (holder.isConnected) holder.replaceChildren(thumbImg(url));
   }
   thumbBusy = false;
 }
 
+/**
+ * Drag to reorder with a mouse, pen or finger. Mouse and pen drags begin after a few
+ * pixels of movement. On touch the tile has to be pressed and held for a moment first,
+ * so an ordinary swipe still scrolls the page.
+ */
 function sortable(root, sel, move) {
-  let from = null;
-  root.ondragstart = (e) => { const t = e.target.closest(sel); if (t) { from = Number(t.dataset.i); e.dataTransfer.effectAllowed = 'move'; t.classList.add('dragging'); } };
-  root.ondragend = () => { from = null; root.querySelectorAll('.dragging,.over').forEach((n) => n.classList.remove('dragging', 'over')); };
-  root.ondragover = (e) => { const t = e.target.closest(sel); if (from !== null && t) { e.preventDefault(); root.querySelectorAll('.over').forEach((n) => n.classList.remove('over')); t.classList.add('over'); } };
-  root.ondrop = (e) => {
-    const t = e.target.closest(sel);
-    if (from === null || !t) return;
-    e.preventDefault(); e.stopPropagation();
-    const to = Number(t.dataset.i);
-    if (to !== from) move(from, to);
+  root.querySelectorAll(sel).forEach((t) => t.classList.add('sortable'));
+  root.onpointerdown = (e) => {
+    const tile = e.target.closest(sel);
+    if (!tile || !e.isPrimary || e.button > 0 || e.target.closest('button, input, a, label')) return;
+    const touch = e.pointerType === 'touch';
+    const from = Number(tile.dataset.i);
+    const sx = e.clientX, sy = e.clientY;
+    let active = false, ghost = null, over = null, timer = 0, raf = 0, last = e;
+
+    const place = (ev) => {
+      ghost.style.transform = `translate(${ev.clientX - sx}px, ${ev.clientY - sy}px) scale(1.04)`;
+      const t = document.elementFromPoint(ev.clientX, ev.clientY)?.closest(sel);
+      const next = t && t !== tile && root.contains(t) ? t : null;
+      if (next !== over) { over?.classList.remove('over'); over = next; over?.classList.add('over'); }
+    };
+    // Keep the page moving when the tile is held near the top or bottom edge.
+    const edgeScroll = () => {
+      const y = last.clientY, edge = 72;
+      const dy = y < edge ? -(edge - y) / 4 : y > innerHeight - edge ? (y - innerHeight + edge) / 4 : 0;
+      if (dy) { scrollBy(0, dy); place(last); }
+      raf = requestAnimationFrame(edgeScroll);
+    };
+    const begin = () => {
+      active = true;
+      const r = tile.getBoundingClientRect();
+      ghost = tile.cloneNode(true);
+      ghost.classList.add('drag-ghost');
+      ghost.removeAttribute('id');
+      Object.assign(ghost.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+      document.body.append(ghost);
+      tile.classList.add('dragging');
+      document.body.classList.add('sorting');
+      navigator.vibrate?.(12);
+      place(last);
+      edgeScroll();
+    };
+    const onMove = (ev) => {
+      if (ev.pointerId !== e.pointerId) return;
+      last = ev;
+      if (active) return place(ev);
+      const dist = Math.hypot(ev.clientX - sx, ev.clientY - sy);
+      if (touch ? dist > 10 : dist > 6) touch ? finish() : begin();
+    };
+    // Once a touch drag has begun, stop the page from scrolling under the finger.
+    const holdPage = (ev) => { if (active && ev.cancelable) ev.preventDefault(); };
+    const noMenu = (ev) => ev.preventDefault();
+    const swallowClick = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
+    function finish(ev) {
+      clearTimeout(timer);
+      cancelAnimationFrame(raf);
+      removeEventListener('pointermove', onMove);
+      removeEventListener('pointerup', finish);
+      removeEventListener('pointercancel', finish);
+      removeEventListener('touchmove', holdPage);
+      tile.removeEventListener('contextmenu', noMenu);
+      if (!active) return;
+      ghost.remove();
+      tile.classList.remove('dragging');
+      document.body.classList.remove('sorting');
+      over?.classList.remove('over');
+      // A drag ends with a click on whatever is underneath. Don't let it toggle anything.
+      addEventListener('click', swallowClick, true);
+      setTimeout(() => removeEventListener('click', swallowClick, true), 350);
+      if (ev?.type === 'pointerup' && over) move(from, Number(over.dataset.i));
+    }
+    addEventListener('pointermove', onMove);
+    addEventListener('pointerup', finish);
+    addEventListener('pointercancel', finish);
+    addEventListener('touchmove', holdPage, { passive: false });
+    tile.addEventListener('contextmenu', noMenu);
+    if (touch) timer = setTimeout(begin, 300);
   };
 }
 
@@ -334,18 +444,20 @@ function renderPages(stage) {
   const { tool, pages, selected } = session;
   const organize = tool.select === 'organize';
   stage.innerHTML = `<div class="tiles pages">${pages.map((p, i) => `
-    <figure class="tile page ${selected.has(p.id) ? `sel sel-${tool.select}` : ''}" data-i="${i}" draggable="${organize}" tabindex="0"
+    <figure class="tile page ${selected.has(p.id) ? `sel sel-${tool.select}` : ''}" data-i="${i}" tabindex="0"
       role="${tool.select === 'none' || organize ? 'group' : 'checkbox'}" aria-checked="${selected.has(p.id)}" aria-label="Page ${i + 1}">
       <div class="thumb" data-thumb="${p.id}"></div>
       <figcaption>${organize && session.files.length > 1 ? `${String.fromCharCode(65 + p.fileIdx)}${p.index + 1}` : p.index + 1}</figcaption>
       ${organize ? `<div class="tile-actions"><button data-act="rot" aria-label="Rotate page ${i + 1}">${icon('rotate', 16)}</button><button data-act="del" aria-label="Delete page ${i + 1}">${icon('x', 16)}</button></div>` : ''}
     </figure>`).join('')}</div>${organize ? addButton() : ''}`;
-  pages.forEach((p) => thumb(session.files[p.fileIdx].pdf, p.index + 1, $(`[data-thumb="${p.id}"]`, stage), p.rotation));
+  resetThumbs();
+  pages.forEach((p) => thumb(session.files[p.fileIdx].pdf, p.index + 1, $(`[data-thumb="${p.id}"]`, stage), p.rotation, session.files[p.fileIdx].id));
   const toggle = (tile) => {
     if (tool.select !== 'remove' && tool.select !== 'keep') return;
     const p = pages[Number(tile.dataset.i)];
     selected.has(p.id) ? selected.delete(p.id) : selected.add(p.id);
-    tile.className = `tile page ${selected.has(p.id) ? `sel sel-${tool.select}` : ''}`;
+    tile.classList.remove('sel', `sel-${tool.select}`);
+    if (selected.has(p.id)) tile.classList.add('sel', `sel-${tool.select}`);
     tile.setAttribute('aria-checked', selected.has(p.id));
   };
   stage.onclick = (e) => {
@@ -565,14 +677,23 @@ async function done(outputs, summary, preview) {
     }
     file = { name: `${tool.id}-results.zip`, blob: await zip.generateAsync({ type: 'blob' }) };
   }
-  const url = URL.createObjectURL(file.blob);
+  if (lastUrl) URL.revokeObjectURL(lastUrl);
+  const url = lastUrl = URL.createObjectURL(file.blob);
   session.result = { outputs, file };
+  // Phones and tablets get a share sheet too: it is how you save to Files on iOS, or
+  // send the result straight to Drive, mail or a chat on Android.
+  const shareable = new File([file.blob], file.name, { type: file.blob.type || 'application/octet-stream' });
+  const share = (coarsePointer() || isIOS) && canShareFile(shareable);
+  // An iOS home-screen app has no download bar, and a download there opens a preview
+  // that is easy to get stuck in. Let people choose instead of starting one for them.
+  const autoDownload = !(isIOS && isStandalone());
   shell(`
     <section class="upload done hue-${tool.hue}">
       <span class="done-mark">${icon('check', 30)}</span>
       <h1>${doneTitle(tool)}</h1>
       <p>${summary ? `${esc(summary)} ` : ''}${outputs.length > 1 ? `${outputs.length} files, packed into one zip.` : ''}</p>
-      <a class="btn btn-cta btn-xl" id="dl" href="${url}" download="${esc(file.name)}">${icon('download', 22)} Download ${outputs.length > 1 ? 'all' : esc(file.name)}</a>
+      <a class="btn btn-cta btn-xl" id="dl" href="${url}" download="${esc(file.name)}">${icon('download', 22)} Download ${outputs.length > 1 ? 'all' : `<span class="dl-name">${esc(file.name)}</span>`}</a>
+      ${share ? `<button class="btn btn-ghost" id="share" type="button">${icon('share', 18)} ${isIOS ? 'Save to Files or share' : 'Share'}</button>` : ''}
       <p class="hint">${formatBytes(file.blob.size)}</p>
       ${preview ? `<div class="preview"><h2>Key points</h2><ul>${preview.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>` : ''}
       <div class="row center">
@@ -581,8 +702,15 @@ async function done(outputs, summary, preview) {
       </div>
     </section>`);
   $('#again').addEventListener('click', (e) => { e.preventDefault(); openTool(tool); });
-  $('#dl').click();
+  $('#share')?.addEventListener('click', () => {
+    navigator.share({ files: [shareable], title: file.name }).catch((e) => {
+      if (e.name !== 'AbortError') toast('Sharing did not work here. Use Download instead.');
+    });
+  });
+  if (autoDownload) $('#dl').click();
 }
+
+let lastUrl = null;
 
 const doneTitle = (t) => ({
   merge: 'Your PDFs are merged', split: 'Your PDF is split', remove: 'Pages removed', extract: 'Pages extracted',

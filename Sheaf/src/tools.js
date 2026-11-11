@@ -9,7 +9,8 @@ export const CATEGORIES = [
   { id: 'smart', label: 'Read & translate' },
 ];
 
-const PDF = 'application/pdf';
+// The extension is listed too because some Android pickers grey out PDFs whose MIME type they don't know.
+const PDF = 'application/pdf,.pdf';
 const LANG_OPTIONS = [['en', 'English'], ['es', 'Spanish'], ['fr', 'French'], ['de', 'German'], ['it', 'Italian'], ['pt', 'Portuguese'], ['nl', 'Dutch'], ['pl', 'Polish'],
   ['ru', 'Russian'], ['uk', 'Ukrainian'], ['tr', 'Turkish'], ['ar', 'Arabic'], ['hi', 'Hindi'], ['zh', 'Chinese'], ['ja', 'Japanese'], ['ko', 'Korean'], ['sv', 'Swedish'], ['vi', 'Vietnamese']];
 const IMG = 'image/jpeg,image/png,image/webp,image/gif,image/bmp';

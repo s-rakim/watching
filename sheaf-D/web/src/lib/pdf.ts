@@ -1,6 +1,8 @@
 import * as pdfjs from 'pdfjs-dist';
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+// The legacy worker carries polyfills that iOS before 17.4 and older Firefox ESR need.
+import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
+import { fitArea } from './device';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -38,7 +40,8 @@ export async function renderPage(
   const rotation = (page.rotate + extraRotation) % 360;
   const base = page.getViewport({ scale: 1, rotation });
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const scale = (cssWidth / base.width) * dpr;
+  let scale = (cssWidth / base.width) * dpr;
+  scale *= fitArea(base.width * scale, base.height * scale);
   const viewport = page.getViewport({ scale, rotation });
   canvas.width = Math.round(viewport.width);
   canvas.height = Math.round(viewport.height);
