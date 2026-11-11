@@ -1,15 +1,15 @@
 """Summarise or translate the text of a PDF.
 
   text_tools.py summarize SRC DST LENGTH            -> Markdown summary
-  text_tools.py translate SRC DST FROM TO FORMAT    -> .docx or .md translation
-  text_tools.py langs                               -> JSON list of installed translation pairs
+  text_tools.py translate SRC DST FROM TO FORMAT    -> translated .pdf, .docx or .md
 
 Summaries are extractive: sentences are scored by how many of the document's key terms
-they carry and the best ones are kept in reading order. Translation uses Argos Translate,
-which runs offline once its language packs are installed (see the Dockerfile).
+they carry and the best ones are kept in reading order. Translation goes through the DeepL
+API (the deepl package) with the key in DEEPL_AUTH_KEY. A PDF comes back as a PDF with its
+layout kept; Word and Markdown output translate the extracted text instead.
 """
-import json
 import math
+import os
 import re
 import sys
 from collections import Counter
@@ -138,66 +138,49 @@ def cmd_summarize(src, dst, length):
 
 # ------------------------------------------------------------- translation
 
-# A cheap language guess for "Detect it": count common words of each installed language.
-HINTS = {
-    "en": "the and of to is in that for with this are was on as be by",
-    "es": "el la de que y en los del se las por un para con una es",
-    "fr": "le la de et les des est que un une pour dans qui sur pas du",
-    "de": "der die und das ist nicht ein eine zu den mit von sich auf für",
-    "it": "il di che la per un una non sono con del della è le gli",
-    "pt": "o a de que e do da em um uma para com não os no se",
-    "nl": "de het een en van is dat op te in niet zijn met voor",
-}
-
-
-def guess(text, choices):
-    ws = Counter(re.findall(r"[^\W\d_]+", text.lower()))
-    scored = [(sum(ws[w] for w in HINTS[c].split()), c) for c in choices if c in HINTS]
-    scored.sort(reverse=True)
-    return scored[0][1] if scored and scored[0][0] > 3 else None
-
-
-def installed():
-    try:
-        from argostranslate import translate
-    except ImportError:
-        return []
-    pairs = []
-    langs = translate.get_installed_languages()
-    for a in langs:
-        for b in langs:
-            if a.code != b.code and a.get_translation(b) is not None:
-                pairs.append([a.code, b.code])
-    return pairs
+def deepl_target(code):
+    code = code.upper()
+    # DeepL wants a regional English or Portuguese as a target
+    return {"EN": "EN-US", "PT": "PT-PT", "ZH": "ZH-HANS"}.get(code, code)
 
 
 def cmd_translate(src, dst, source, target, fmt):
     try:
-        from argostranslate import translate
+        import deepl
     except ImportError:
-        fail("Translation is not installed in this Sheaf-D image. Rebuild it with TRANSLATE_LANGS set, see the README.")
-    blocks, _ = read_blocks(src)
-    text = " ".join(b["text"] for b in blocks if b["t"] != "page")
-    if not text.strip():
-        fail("This PDF has no text to translate. If it is a scan, run OCR PDF on it first.")
-    codes = {l.code: l for l in translate.get_installed_languages()}
-    if source == "auto":
-        source = guess(text[:4000], [c for c in codes if c != target])
-        if not source:
-            fail("Could not tell which language the PDF is in. Pick it under From.")
-    if source == target:
+        fail("The DeepL library is not installed. Run pip install deepl on the machine running Sheaf-D.")
+    key = os.environ.get("DEEPL_AUTH_KEY", "").strip()
+    if not key:
+        fail("Translate needs a DeepL API key. Set DEEPL_AUTH_KEY for Sheaf-D and restart it.")
+    translator = deepl.DeepLClient(key, send_platform_info=False)
+    source_lang = None if source == "auto" else source.upper().split("-")[0]
+    target_lang = deepl_target(target)
+    if source_lang and target_lang.startswith(source_lang):
         fail("The PDF is already in that language.")
-    if source not in codes or target not in codes:
-        fail(f"The {source} to {target} language pack is not installed in this Sheaf-D image.")
-    tr = codes[source].get_translation(codes[target])
-    if tr is None:
-        # Argos can pivot through English when both directions are installed
-        if "en" in codes and codes[source].get_translation(codes["en"]) and codes["en"].get_translation(codes[target]):
-            a, b = codes[source].get_translation(codes["en"]), codes["en"].get_translation(codes[target])
-            tr = type("Pivot", (), {"translate": lambda self, t: b.translate(a.translate(t))})()
-        else:
-            fail(f"The {source} to {target} language pack is not installed in this Sheaf-D image.")
-    out = [dict(b, text=tr.translate(b["text"])) if b["t"] != "page" else b for b in blocks]
+    try:
+        if fmt == "pdf":
+            # DeepL rebuilds the PDF itself, so headings, tables and pictures stay where they were
+            translator.translate_document_from_filepath(src, dst, source_lang=source_lang, target_lang=target_lang)
+            return
+        blocks, _ = read_blocks(src)
+        todo = [i for i, b in enumerate(blocks) if b["t"] != "page" and b["text"].strip()]
+        if not todo:
+            fail("This PDF has no text to translate. If it is a scan, run OCR PDF on it first.")
+        out = [dict(b) for b in blocks]
+        # DeepL takes up to 50 texts per request
+        for start in range(0, len(todo), 50):
+            chunk = todo[start:start + 50]
+            results = translator.translate_text([blocks[i]["text"] for i in chunk], source_lang=source_lang, target_lang=target_lang)
+            for i, r in zip(chunk, results):
+                out[i]["text"] = r.text
+    except deepl.AuthorizationException:
+        fail("DeepL turned down the API key. Check DEEPL_AUTH_KEY.")
+    except deepl.QuotaExceededException:
+        fail("Your DeepL quota for this month is used up.")
+    except deepl.DocumentTranslationException as e:
+        fail(f"DeepL could not translate this PDF: {e}. Try Word or Markdown output instead.")
+    except deepl.DeepLException as e:
+        fail(f"DeepL returned an error: {e}")
     if fmt == "md":
         write_md(out, dst)
     else:
@@ -252,5 +235,3 @@ if __name__ == "__main__":
         cmd_summarize(*sys.argv[2:5])
     elif cmd == "translate":
         cmd_translate(*sys.argv[2:7])
-    elif cmd == "langs":
-        print(json.dumps(installed()))

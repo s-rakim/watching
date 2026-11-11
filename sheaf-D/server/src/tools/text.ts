@@ -23,13 +23,17 @@ export const summarize: Tool = async (job: Job) => {
   return outs;
 };
 
-const CODE = /^[a-z]{2,3}$/;
+// DeepL language codes: two letters, plus regional targets like en-gb or pt-br.
+const CODE = /^[a-z]{2}(-[a-z0-9]{2,4})?$/i;
 
 export const translate: Tool = async (job: Job) => {
   needFiles(job, 1, 'PDF');
   const from = String(job.opts.from ?? 'auto');
   const to = String(job.opts.to ?? 'en');
-  const format = job.opts.format === 'md' ? 'md' : 'docx';
+  const format = ['md', 'docx'].includes(job.opts.format) ? String(job.opts.format) : 'pdf';
+  if (!process.env.DEEPL_AUTH_KEY?.trim()) {
+    throw Object.assign(new UserError('Translate needs a DeepL API key. Set DEEPL_AUTH_KEY for Sheaf-D (the README shows how) and restart it.'), { status: 501 });
+  }
   if ((from !== 'auto' && !CODE.test(from)) || !CODE.test(to)) throw new UserError('Pick the languages to translate between.');
   const outs: Output[] = [];
   for (const file of job.files) {

@@ -1,10 +1,6 @@
 services:
   sheaf-d:
-    build:
-      context: .
-      args:
-        # Turn on Translate PDF, e.g. TRANSLATE_LANGS="es fr de" docker compose up -d --build
-        TRANSLATE_LANGS: ${TRANSLATE_LANGS:-}
+    build: .
     image: sheaf-d:latest
     container_name: sheaf-d
     restart: unless-stopped
@@ -13,6 +9,8 @@ services:
       - "127.0.0.1:8080:8080"
     environment:
       MAX_UPLOAD_MB: "500"
+      # DeepL API key for Translate PDF. Put DEEPL_AUTH_KEY=... in a .env file next to this one.
+      DEEPL_AUTH_KEY: ${DEEPL_AUTH_KEY:-}
     # Uploads and results live in memory and vanish with the request.
     tmpfs:
       - /work:size=4g,uid=1000,gid=1000

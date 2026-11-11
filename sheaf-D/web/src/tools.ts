@@ -850,7 +850,7 @@ export const TOOLS: ToolDef[] = [
   {
     id: 'translate',
     name: 'Translate PDF',
-    blurb: 'Translate the text of a PDF into another language, offline on this machine.',
+    blurb: 'Translate a PDF with DeepL and get it back with the layout kept.',
     category: 'smart',
     icon: Languages,
     accept: ['pdf'],
@@ -859,8 +859,8 @@ export const TOOLS: ToolDef[] = [
     action: 'Translate',
     working: 'Translating',
     needs: ['python', 'translate'],
-    missingHint: 'Translation is optional because the language packs are large. Rebuild the image with TRANSLATE_LANGS set (the README shows how) to switch it on.',
-    defaults: { from: 'auto', to: 'en', format: 'docx' },
+    missingHint: 'Translate uses DeepL and needs your DeepL API key. Set DEEPL_AUTH_KEY for Sheaf-D (the README shows how) and restart it.',
+    defaults: { from: 'auto', to: 'en-us', format: 'pdf' },
     fields: [
       { type: 'translate-language', key: 'from', label: 'From', allowAuto: true },
       { type: 'translate-language', key: 'to', label: 'To' },
@@ -869,12 +869,14 @@ export const TOOLS: ToolDef[] = [
         key: 'format',
         label: 'Save as',
         options: [
-          { value: 'docx', label: 'Word' },
-          { value: 'md', label: 'Markdown' },
+          { value: 'pdf', label: 'PDF', hint: 'Same layout, translated in place' },
+          { value: 'docx', label: 'Word', hint: 'Just the text, headings and lists' },
+          { value: 'md', label: 'Markdown', hint: 'Just the text, headings and lists' },
         ],
+        hint: 'Your file is sent to DeepL to be translated. Every other tool keeps it on this machine.',
       },
     ],
-    check: (o) => (o.from === o.to ? 'Pick two different languages.' : null),
+    check: (o) => (o.from !== 'auto' && String(o.to).startsWith(o.from) ? 'Pick two different languages.' : null),
   },
   {
     id: 'workflow',

@@ -36,7 +36,7 @@ To reach it from your own devices anywhere, Tailscale is the safer option: `tail
 | Convert from PDF | PDF to JPG, PDF to Word, PDF to PowerPoint, PDF to Excel, PDF to PDF/A |
 | Edit | Edit PDF, Rotate PDF, Add page numbers, Add watermark, Crop PDF |
 | Security | Unlock PDF, Protect PDF, Sign PDF, Redact PDF, Compare PDF |
-| Read & translate | Summarize PDF, Translate PDF (optional, see below) |
+| Read & translate | Summarize PDF, Translate PDF (needs a DeepL API key, see below) |
 
 A few things worth knowing:
 
@@ -44,11 +44,11 @@ A few things worth knowing:
 - **Redact really removes things.** Pages with black boxes on them are rebuilt as images, so the text underneath is gone from the file, not just covered. Those pages lose their selectable text; run OCR afterwards if you want it back.
 - **Sign adds a visible signature**, drawn, typed or uploaded. It is not a certificate-based digital signature.
 - **Scan to PDF uses your camera**, which browsers only allow on `localhost` or over HTTPS.
-- **HTML to PDF fetches the address you give it** from the machine running Sheaf-D. That is the one tool that talks to the outside world, and only when you ask it to.
+- **HTML to PDF and Translate are the two tools that talk to the outside world**, and only when you use them. HTML to PDF fetches the address you give it. Translate sends your file to DeepL.
 - **Edit's highlighter comes in six colours** plus a picker for any other colour. Pen, shapes and text have their own colour row.
 - **Workflow chains tools.** Pick up to eight steps from Merge, Rotate, Compress, Repair, OCR, Page numbers, Watermark (text), PDF/A, Unlock and Protect. Each step works on what the one before it produced. Merge can only go first and Protect only last.
 - **Summarize picks the key sentences** from the PDF's own text and lists its main sections. No language model is involved, so it's quick and works on any machine. Scanned PDFs need OCR first.
-- **Translate runs offline with Argos Translate**, but it is off unless you switch it on at build time (next section), because each language adds a few hundred MB to the image. Layout isn't kept: you get the translated text as a Word or Markdown file.
+- **Translate uses DeepL.** By default you get a translated PDF with the original layout, because DeepL rebuilds the document itself. You can also get just the translated text as Word or Markdown. It needs your own DeepL API key (next section). DeepL's free plan covers 500,000 characters a month, and a PDF costs at least 50,000 of them however short it is, so Word or Markdown output stretches a free key further.
 - **Uploads are deleted as soon as the result has been sent back.** In the Docker setup they only ever exist in memory.
 
 ## Settings
@@ -67,13 +67,13 @@ OCR ships with English, German, French, Spanish, Italian, Portuguese and Dutch. 
 docker compose build --build-arg OCR_LANGS="deu jpn chi_sim"
 ```
 
-Translate PDF needs language packs, which aren't installed by default. List two-letter codes when you build and English to and from each one gets installed (other pairs go through English):
+Translate PDF needs a DeepL API key. Get one from your account page at deepl.com (the free plan works). Then put it in a file called `.env` next to `docker-compose.yml`:
 
 ```sh
-TRANSLATE_LANGS="es fr de" docker compose up -d --build
+DEEPL_AUTH_KEY=your-key-here
 ```
 
-This adds Argos Translate and a CPU-only build of PyTorch, roughly 1 GB on top of the usual image, plus 100 to 200 MB per language. Downloading the packs is the only part of the build that needs the Argos package index; once built, translating never leaves the machine.
+and run `docker compose up -d` again. Keys ending in `:fx` are free-plan keys, and the DeepL library sends them to the right endpoint on its own. The key stays on the server: the browser never sees it. `.env` is already ignored by git.
 
 The gear icon in the app opens a small settings panel with the theme (light, dark or follow the system), the background colour, and a list of which engines the server found.
 
@@ -96,13 +96,13 @@ Every tool that needs an outside program will tell you when that program is miss
 | Poppler (`pdftoppm`, `pdfimages`) | PDF to JPG |
 | Chromium or Chrome | HTML to PDF |
 | Python 3 with `pdf2docx`, `pdfplumber`, `openpyxl`, `Pillow` | PDF to Word, PDF to Excel, JPG to PDF, Scan to PDF, Summarize |
-| `argostranslate` (optional) | Translate. Install it with pip, then run `python3 server/py/install_argos.py es fr` for the languages you want |
+| `deepl` (pip) and a `DEEPL_AUTH_KEY` environment variable | Translate |
 
 On Debian or Ubuntu that is roughly:
 
 ```sh
 sudo apt install qpdf ghostscript poppler-utils ocrmypdf tesseract-ocr libreoffice chromium python3-pip
-pip install pdf2docx pdfplumber openpyxl pillow
+pip install pdf2docx pdfplumber openpyxl pillow deepl
 ```
 
 If a program lives somewhere unusual, point to it with `SOFFICE_BIN`, `OCRMYPDF_BIN`, `CHROMIUM_BIN` or `PYTHON_BIN`.
@@ -137,4 +137,4 @@ Adding a server tool: write a function in `server/src/tools/` that takes the upl
 
 ## Credits
 
-Sheaf-D is glue around some excellent open source software: qpdf, Ghostscript, LibreOffice, OCRmyPDF, Tesseract, Poppler, Chromium, pdf.js, pdf-lib, pdf2docx and, if you turn it on, Argos Translate. Each has its own licence. Ghostscript in particular is AGPL, which matters if you plan to offer this as a service to other people.
+Sheaf-D is glue around some excellent open source software: qpdf, Ghostscript, LibreOffice, OCRmyPDF, Tesseract, Poppler, Chromium, pdf.js, pdf-lib, pdf2docx and DeepL's Python library. Each has its own licence. Ghostscript in particular is AGPL, which matters if you plan to offer this as a service to other people.

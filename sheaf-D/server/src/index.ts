@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import archiver from 'archiver';
 import express, { NextFunction, Request, Response } from 'express';
 import multer from 'multer';
-import { Job, Output, PY_DIR, Tool, UserError, run, safeName } from './lib.js';
+import { Job, Output, Tool, UserError, run, safeName } from './lib.js';
 import { extractPages, merge, organize, removePages, rotate, split } from './tools/pages.js';
 import { compress, ocr, pdfa, repair } from './tools/optimize.js';
 import { protect, unlock } from './tools/security.js';
@@ -103,7 +103,7 @@ async function probe(cmd: string, args: string[]): Promise<string | null> {
 let capabilities: Promise<Record<string, unknown>> | null = null;
 function detect() {
   capabilities ??= (async () => {
-    const [qpdfV, gsV, office, ocrV, langs, poppler, py, pairs] = await Promise.all([
+    const [qpdfV, gsV, office, ocrV, langs, poppler, py, deepl] = await Promise.all([
       probe('qpdf', ['--version']),
       probe('gs', ['--version']),
       probe(process.env.SOFFICE_BIN || 'soffice', ['--version']),
@@ -111,14 +111,8 @@ function detect() {
       probe('tesseract', ['--list-langs']),
       probe('pdftoppm', ['-v']),
       probe(process.env.PYTHON_BIN || 'python3', ['-c', 'import pdf2docx, pdfplumber, openpyxl, PIL; print("ok")']),
-      probe(process.env.PYTHON_BIN || 'python3', [path.join(PY_DIR, 'text_tools.py'), 'langs']),
+      probe(process.env.PYTHON_BIN || 'python3', ['-c', 'import deepl; print("ok")']),
     ]);
-    let translatePairs: string[][] = [];
-    try {
-      translatePairs = JSON.parse(pairs ?? '[]');
-    } catch {
-      /* not installed */
-    }
     return {
       qpdf: !!qpdfV,
       ghostscript: !!gsV,
@@ -127,8 +121,8 @@ function detect() {
       poppler: !!poppler,
       python: py === 'ok',
       chromium: !!browserPath(),
-      translate: translatePairs.length > 0,
-      translatePairs,
+      // Translate needs the DeepL library and an API key. The key itself never leaves the server.
+      translate: deepl === 'ok' && !!process.env.DEEPL_AUTH_KEY?.trim(),
       languages: (langs ?? '')
         .split('\n')
         .map((l) => l.trim())

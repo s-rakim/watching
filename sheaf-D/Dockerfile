@@ -16,14 +16,6 @@ FROM node:22-bookworm-slim
 # Example: docker compose build --build-arg OCR_LANGS="deu fra spa"
 ARG OCR_LANGS="deu fra spa ita por nld"
 
-# Offline translation for Translate PDF is optional because each language adds a few
-# hundred MB (Argos Translate plus a CPU build of PyTorch). Two-letter codes, space separated.
-# Example: docker compose build --build-arg TRANSLATE_LANGS="es fr de"
-ARG TRANSLATE_LANGS=""
-ENV ARGOS_PACKAGES_DIR=/opt/argos/packages \
-    ARGOS_DEVICE_TYPE=cpu
-COPY server/py/install_argos.py /tmp/install_argos.py
-
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
@@ -36,15 +28,7 @@ RUN apt-get update \
       fonts-liberation fonts-dejavu-core fonts-noto-core fonts-noto-cjk \
       fonts-crosextra-carlito fonts-crosextra-caladea \
       tini ca-certificates \
- && pip3 install --no-cache-dir --break-system-packages pdf2docx pdfplumber openpyxl \
- && if [ -n "$TRANSLATE_LANGS" ]; then \
-      pip3 install --no-cache-dir --break-system-packages torch --index-url https://download.pytorch.org/whl/cpu \
-   && pip3 install --no-cache-dir --break-system-packages argostranslate \
-   && mkdir -p "$ARGOS_PACKAGES_DIR" \
-   && python3 /tmp/install_argos.py $TRANSLATE_LANGS \
-   && chmod -R a+rX /opt/argos; \
-    fi \
- && rm -f /tmp/install_argos.py \
+ && pip3 install --no-cache-dir --break-system-packages pdf2docx pdfplumber openpyxl deepl \
  && apt-get purge -y python3-pip \
  && apt-get autoremove -y \
  && rm -rf /var/lib/apt/lists/* /root/.cache

@@ -9,7 +9,6 @@ export interface Health {
   chromium: boolean;
   languages: string[];
   translate?: boolean;
-  translatePairs?: string[][];
   maxUploadMb: number;
 }
 
