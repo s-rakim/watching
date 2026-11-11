@@ -24,6 +24,8 @@ To stop it: `docker compose down`. To update: `git pull`, then `docker compose u
 
 By default the app is only reachable from the computer it runs on. If you want other devices on your network to use it, change the port line in `docker-compose.yml` from `127.0.0.1:8080:8080` to `8080:8080`. There are no user accounts, so only do that on a network you trust.
 
+To reach it from your own devices anywhere, Tailscale is the safer option: `tailscale serve --bg 8080` gives you an HTTPS address on your tailnet and needs no change to the port line. See [Access over Tailscale](../README.md#access-over-tailscale).
+
 ## What's in it
 
 | Family | Tools |

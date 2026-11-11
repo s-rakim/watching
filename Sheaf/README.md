@@ -41,6 +41,8 @@ Put the contents of `dist/` on any static host (Nginx, Caddy, GitHub Pages, Netl
 
 Scan to PDF uses the camera, which browsers only allow on `localhost` or over HTTPS.
 
+To use it from your other devices over Tailscale, `npm run serve` builds it and serves it on port 8080 on all interfaces. The [Access over Tailscale](../README.md#access-over-tailscale) section of the main README covers the firewall rule, HTTPS with `tailscale serve`, and troubleshooting.
+
 ## How it is put together
 
 - `src/tools.js` lists every tool: its category, workspace type and option fields. Adding a tool starts here.
