@@ -4,14 +4,23 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/copy-ocr.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/copy-ocr.mjs",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "@cantoo/pdf-lib": "^2.11.1",
+    "@tesseract.js-data/deu": "^1.0.0",
+    "@tesseract.js-data/eng": "^1.0.0",
+    "@tesseract.js-data/fra": "^1.0.0",
+    "@tesseract.js-data/ita": "^1.0.0",
+    "@tesseract.js-data/por": "^1.0.0",
+    "@tesseract.js-data/spa": "^1.0.0",
     "jszip": "^3.10.2",
-    "pdfjs-dist": "^6.5.438"
+    "pdfjs-dist": "^6.5.438",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "vite": "^8.3.7"

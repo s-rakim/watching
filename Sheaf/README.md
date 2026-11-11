@@ -2,17 +2,18 @@
 
 PDF tools that run entirely in the browser. Nothing is uploaded: files are read, changed and saved on the device. There's no server and no Docker, just a static site.
 
-For Word, Excel and PowerPoint conversions, OCR and the other tools that need real software behind them, use [Sheaf-D](../sheaf-D/), the Docker version.
+For Word, Excel, PowerPoint and HTML to PDF, PDF/A and chained workflows, which need real software behind them, use [Sheaf-D](../sheaf-D/), the Docker version.
 
 ## Tools
 
 | Group | Tools |
 | --- | --- |
 | Organize | Merge, Split, Remove pages, Extract pages, Organize, Scan to PDF |
-| Optimize | Compress, Repair |
-| Convert | JPG to PDF, PDF to JPG, PDF to Markdown / text |
-| Edit | Edit (change existing text, add text, images, shapes, drawing, highlights, white out), Rotate, Page numbers, Watermark, Crop |
+| Optimize | Compress, Repair, OCR |
+| Convert | JPG to PDF, PDF to JPG, PDF to Word, PDF to Excel, PDF to PowerPoint, PDF to Markdown / text |
+| Edit | Edit (change existing text, add text, images, shapes, drawing, highlights in six colours or any custom colour, white out), Rotate, Page numbers, Watermark, Crop |
 | Security | Sign, Protect (AES-256), Unlock, Redact, Compare |
+| Read & translate | Summarize, Translate |
 
 Every tool follows the same three steps: pick files, set options next to a live preview, download the result. Several outputs are packed into one zip.
 
@@ -44,6 +45,8 @@ Scan to PDF uses the camera, which browsers only allow on `localhost` or over HT
 
 - `src/tools.js` lists every tool: its category, workspace type and option fields. Adding a tool starts here.
 - `src/lib/ops.js` holds the PDF work itself (pdf-lib for writing, pdf.js for rendering and text).
+- `src/lib/convert.js` has PDF to Word, Excel and PowerPoint, OCR, Summarize and Translate; `src/lib/office.js` writes the .docx, .xlsx and .pptx files.
+- `scripts/copy-ocr.mjs` copies Tesseract and its language data into `public/ocr` before `dev` and `build`, so OCR never fetches anything from a CDN.
 - `src/main.js` is the shell: routing, upload, the options panel, file and page grids, the result screen.
 - `src/editor.js` is the page editor behind Edit, Sign, Redact and Crop.
 
@@ -51,4 +54,8 @@ Scan to PDF uses the camera, which browsers only allow on `localhost` or over HT
 
 - Compress re-encodes embedded JPEGs and leaves text and vector content alone, so files that are mostly text will not shrink much.
 - Redact flattens the pages it touches into images so the hidden content is gone from the file, not just covered.
-- Office conversions (Word, Excel, PowerPoint), OCR, HTML to PDF and PDF/A need a server or a large model download and are not included.
+- OCR runs Tesseract compiled to WebAssembly. English, Spanish, French, German, Italian and Portuguese are bundled (about 30 MB, loaded only when you use OCR). It's slower than Sheaf-D's OCR on big scans.
+- PDF to Word keeps the text, headings and lists, not the exact layout or images. PDF to Excel splits lines into columns where the gaps are, which works well on reports and statements made from spreadsheets. PDF to PowerPoint puts a picture of each page on its own slide.
+- Summarize uses the summariser built into recent Chrome when there is one, and otherwise picks the key sentences from the text itself.
+- Translate uses the browser's on-device translator (Chrome 138 or newer on a desktop). Other browsers don't have one yet and get a message pointing to Sheaf-D. The output is the translated text as Word or Markdown; layout isn't kept.
+- Word, Excel, PowerPoint and HTML to PDF, PDF/A and workflows need real software (LibreOffice, Chromium, Ghostscript) and live in Sheaf-D.

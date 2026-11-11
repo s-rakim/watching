@@ -6,9 +6,12 @@ export const CATEGORIES = [
   { id: 'convert', label: 'Convert' },
   { id: 'edit', label: 'Edit' },
   { id: 'security', label: 'Security' },
+  { id: 'smart', label: 'Read & translate' },
 ];
 
 const PDF = 'application/pdf';
+const LANG_OPTIONS = [['en', 'English'], ['es', 'Spanish'], ['fr', 'French'], ['de', 'German'], ['it', 'Italian'], ['pt', 'Portuguese'], ['nl', 'Dutch'], ['pl', 'Polish'],
+  ['ru', 'Russian'], ['uk', 'Ukrainian'], ['tr', 'Turkish'], ['ar', 'Arabic'], ['hi', 'Hindi'], ['zh', 'Chinese'], ['ja', 'Japanese'], ['ko', 'Korean'], ['sv', 'Swedish'], ['vi', 'Vietnamese']];
 const IMG = 'image/jpeg,image/png,image/webp,image/gif,image/bmp';
 
 export const TOOLS = [
@@ -72,6 +75,16 @@ export const TOOLS = [
     mode: 'files', accept: PDF, multiple: true, action: 'Repair PDF', lenient: true,
   },
   {
+    id: 'ocr', title: 'OCR PDF', cat: 'optimize', icon: 'scanText', hue: 'orange',
+    desc: 'Read the words in scanned pages so you can search, select and copy them.',
+    mode: 'files', accept: PDF, multiple: true, action: 'Recognise text', busy: 'Reading your pages…',
+    fields: [
+      { key: 'lang', label: 'Language of the document', type: 'select', default: 'eng', options: [['eng', 'English'], ['spa', 'Spanish'], ['fra', 'French'], ['deu', 'German'], ['ita', 'Italian'], ['por', 'Portuguese']] },
+      { key: 'output', label: 'Output', type: 'segmented', default: 'pdf', options: [['pdf', 'Searchable PDF'], ['txt', 'Plain text']] },
+      { key: 'skipText', label: 'Skip pages that already have text', type: 'checkbox', default: true },
+    ],
+  },
+  {
     id: 'jpg-to-pdf', title: 'JPG to PDF', cat: 'convert', icon: 'image', hue: 'amber',
     desc: 'Turn JPG, PNG or WebP images into a PDF with the margins you choose.',
     mode: 'images', accept: IMG, multiple: true, action: 'Convert to PDF',
@@ -96,6 +109,23 @@ export const TOOLS = [
     desc: 'Pull the text out as Markdown with headings and lists, or as plain text.',
     mode: 'files', accept: PDF, multiple: true, action: 'Convert',
     fields: [{ key: 'format', label: 'Output', type: 'segmented', default: 'md', options: [['md', 'Markdown'], ['txt', 'Plain text']] }],
+  },
+  {
+    id: 'pdf-to-word', title: 'PDF to Word', cat: 'convert', icon: 'fileWord', hue: 'amber',
+    desc: 'Get an editable DOCX with the headings, paragraphs and lists from your PDF.',
+    mode: 'files', accept: PDF, multiple: true, action: 'Convert to Word', busy: 'Building your document…',
+  },
+  {
+    id: 'pdf-to-excel', title: 'PDF to Excel', cat: 'convert', icon: 'table', hue: 'amber',
+    desc: 'Pull tables and columns of figures into an XLSX spreadsheet.',
+    mode: 'files', accept: PDF, multiple: true, action: 'Convert to Excel', busy: 'Finding the columns…',
+    fields: [{ key: 'layout', label: 'Sheets', type: 'segmented', default: 'pages', options: [['pages', 'One per page'], ['one', 'All on one']] }],
+  },
+  {
+    id: 'pdf-to-powerpoint', title: 'PDF to PowerPoint', cat: 'convert', icon: 'slides', hue: 'amber',
+    desc: 'Turn every page into a slide in a PPTX deck, ready to present or rearrange.',
+    mode: 'files', accept: PDF, multiple: true, action: 'Convert to PowerPoint', busy: 'Building your slides…',
+    fields: [{ key: 'dpi', label: 'Slide image quality', type: 'select', default: '150', options: [['96', 'Light (96 dpi)'], ['150', 'Normal (150 dpi)'], ['220', 'Sharp (220 dpi)']] }],
   },
   {
     id: 'edit', title: 'Edit PDF', cat: 'edit', icon: 'edit', hue: 'pink',
@@ -172,6 +202,26 @@ export const TOOLS = [
     id: 'compare', title: 'Compare PDF', cat: 'security', icon: 'compare', hue: 'sky',
     desc: 'Put two versions side by side and see which words were added or removed.',
     mode: 'compare', accept: PDF, multiple: true, min: 2, max: 2, action: 'Compare',
+  },
+  {
+    id: 'summarize', title: 'Summarize PDF', cat: 'smart', icon: 'summary', hue: 'violet',
+    desc: 'Get the key points of a long PDF in a few lines, worked out on your device.',
+    mode: 'files', accept: PDF, action: 'Summarize', busy: 'Reading and summarising…',
+    fields: [
+      { key: 'length', label: 'Length', type: 'segmented', default: 'medium', options: [['short', 'Short'], ['medium', 'Medium'], ['long', 'Long']] },
+      { key: 'method', label: 'How', type: 'select', default: 'auto', options: [['auto', 'Browser model if there is one'], ['local', 'Pick key sentences only']],
+        hint: 'Chrome has a built-in summariser that writes new sentences. Other browsers pick the most important sentences from the text.' },
+    ],
+  },
+  {
+    id: 'translate', title: 'Translate PDF', cat: 'smart', icon: 'languages', hue: 'violet',
+    desc: 'Translate the text of a PDF into another language with your browser\'s on-device translator.',
+    mode: 'files', accept: PDF, action: 'Translate', busy: 'Translating…',
+    fields: [
+      { key: 'from', label: 'From', type: 'select', default: 'auto', options: [['auto', 'Detect it'], ...LANG_OPTIONS] },
+      { key: 'to', label: 'To', type: 'select', default: 'en', options: LANG_OPTIONS },
+      { key: 'format', label: 'Save as', type: 'segmented', default: 'docx', options: [['docx', 'Word'], ['md', 'Markdown']] },
+    ],
   },
 ];
 
