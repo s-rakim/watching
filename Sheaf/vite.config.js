@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { defineConfig } from 'vite';
 
@@ -17,7 +17,10 @@ function serviceWorker() {
     enforce: 'post',
     generateBundle(_, bundle) {
       const built = Object.keys(bundle).filter((f) => !f.endsWith('.map') && f !== 'index.html');
-      const files = ['./', ...built, ...publicFiles('public')].sort();
+      // OCR engines and language data are tens of MB. They are stored the first time OCR
+      // runs instead, so installing the app doesn't download them all up front.
+      const pub = existsSync('public') ? publicFiles('public').filter((f) => !f.startsWith('ocr/')) : [];
+      const files = ['./', ...built, ...pub].sort();
       const hash = createHash('sha256');
       for (const f of built) {
         const item = bundle[f];
