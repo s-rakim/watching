@@ -5,6 +5,16 @@
 export const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
+export const isAndroid = /Android/i.test(navigator.userAgent) || navigator.userAgentData?.platform === 'Android';
+
+// Android hands the accept list to whatever file app is installed, and plenty of them
+// (Files by Google on some builds, Samsung My Files, download managers, cloud drives)
+// tag PDFs as application/octet-stream or nothing at all. Those files show up greyed
+// out and can't be tapped. On Android let every file through the picker and check
+// what came back with looksLikePdf instead. Image pickers are left alone so Android
+// still opens its photo picker for them.
+export const pickerAccept = (accept) => (isAndroid && !/^image\//.test(accept) ? '' : accept);
+
 export const isStandalone = () =>
   matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 

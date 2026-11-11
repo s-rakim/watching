@@ -4,6 +4,10 @@
 export const isIOS =
   /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
+export const isAndroid =
+  /Android/i.test(navigator.userAgent) ||
+  (navigator as { userAgentData?: { platform?: string } }).userAgentData?.platform === 'Android';
+
 export const isStandalone = () =>
   matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true;
 
@@ -34,6 +38,19 @@ export const PLAIN_EDIT: 'plaintext-only' | 'true' = (() => {
 export function canShareFile(file: File) {
   try {
     return !!navigator.canShare?.({ files: [file] });
+  } catch {
+    return false;
+  }
+}
+
+// Some Android file pickers (Drive, Samsung My Files, download managers) hand over PDFs
+// typed as application/octet-stream or with no extension at all. Reading the first bytes settles it.
+export async function looksLikePdf(file: File): Promise<boolean> {
+  if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) return true;
+  if (file.type && file.type !== 'application/octet-stream') return false;
+  try {
+    const head = new Uint8Array(await file.slice(0, 1024).arrayBuffer());
+    return new TextDecoder('latin1').decode(head).includes('%PDF-');
   } catch {
     return false;
   }

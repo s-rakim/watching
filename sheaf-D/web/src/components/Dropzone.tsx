@@ -1,17 +1,58 @@
 import { Plus } from 'lucide-react';
 import { DragEvent, ReactNode, useEffect, useRef, useState } from 'react';
+import { isAndroid, looksLikePdf } from '../lib/device';
 import { extOf, plural } from '../lib/format';
 import { ToolDef } from '../tools';
 
+const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'tif', 'tiff']);
+
+// Android passes the accept list on to whichever file app is installed, and many of them
+// tag documents as application/octet-stream. Those files come up greyed out and can't be
+// tapped, so on Android the picker lets everything through and sortFiles checks the
+// result. Image-only tools keep their filter so Android still opens its photo picker.
 export function acceptAttr(tool: ToolDef): string {
+  if (isAndroid && !tool.accept.every((e) => IMAGE_EXTS.has(e))) return '';
   return tool.accept.map((e) => `.${e}`).join(',');
 }
 
-/** Splits dropped files into the ones a tool takes and the ones it doesn't. */
-export function sortFiles(tool: ToolDef, files: File[]): { ok: File[]; bad: File[] } {
+const MIME_EXT: Record<string, string> = {
+  'application/pdf': 'pdf',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'image/bmp': 'bmp',
+  'image/tiff': 'tiff',
+  'application/msword': 'doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.oasis.opendocument.text': 'odt',
+  'application/rtf': 'rtf',
+  'text/plain': 'txt',
+  'application/vnd.ms-excel': 'xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.oasis.opendocument.spreadsheet': 'ods',
+  'text/csv': 'csv',
+  'application/vnd.ms-powerpoint': 'ppt',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+  'application/vnd.oasis.opendocument.presentation': 'odp',
+  'text/html': 'html',
+};
+
+async function fits(tool: ToolDef, f: File): Promise<boolean> {
+  const ext = extOf(f.name);
+  if (tool.accept.includes(ext)) return true;
+  const fromType = MIME_EXT[f.type];
+  if (fromType) return tool.accept.includes(fromType) || (fromType === 'jpg' && tool.accept.includes('jpeg'));
+  // Picked from a content provider with a bare name like "document" or "12345".
+  return tool.accept.includes('pdf') && looksLikePdf(f);
+}
+
+/** Splits picked or dropped files into the ones a tool takes and the ones it doesn't. */
+export async function sortFiles(tool: ToolDef, files: File[]): Promise<{ ok: File[]; bad: File[] }> {
   const ok: File[] = [];
   const bad: File[] = [];
-  for (const f of files) (tool.accept.includes(extOf(f.name)) ? ok : bad).push(f);
+  const checks = await Promise.all(files.map((f) => fits(tool, f)));
+  files.forEach((f, i) => (checks[i] ? ok : bad).push(f));
   return { ok, bad };
 }
 
@@ -31,8 +72,8 @@ export default function Dropzone({ tool, onFiles, maxMb, children, compact }: Pr
   const input = useRef<HTMLInputElement>(null);
   const timer = useRef<number>();
 
-  const take = (list: File[]) => {
-    const { ok, bad } = sortFiles(tool, list);
+  const take = async (list: File[]) => {
+    const { ok, bad } = await sortFiles(tool, list);
     const limit = (maxMb ?? 500) * 1024 * 1024;
     const tooBig = tool.local ? [] : ok.filter((f) => f.size > limit);
     const good = ok.filter((f) => !tooBig.includes(f));
@@ -92,17 +133,17 @@ export default function Dropzone({ tool, onFiles, maxMb, children, compact }: Pr
       ) : (
         <>
           <p className="dropzone-title">{compact ? (tool.multiple ? 'Drop more files here' : 'Drop a different file here') : `Drop ${many} here`}</p>
-          <label className="btn btn-secondary">
+          <label className="btn btn-secondary has-pick">
             <Plus size={18} strokeWidth={2} />
             {compact && !tool.multiple ? 'Replace file' : `Choose ${tool.multiple ? 'files' : 'a file'}`}
             <input
               ref={input}
               type="file"
-              className="sr-only"
+              className="pick"
               accept={acceptAttr(tool)}
               multiple={tool.multiple}
               onChange={(e) => {
-                take(Array.from(e.target.files ?? []));
+                void take(Array.from(e.target.files ?? []));
                 e.target.value = '';
               }}
             />
