@@ -9,7 +9,7 @@
     "prebuild": "node scripts/copy-ocr.mjs",
     "build": "vite build",
     "preview": "vite preview",
-    "serve": "vite build && vite preview --host --port 8080"
+    "serve": "npm run build && vite preview --host --port 8080"
   },
   "dependencies": {
     "@cantoo/pdf-lib": "^2.11.1",

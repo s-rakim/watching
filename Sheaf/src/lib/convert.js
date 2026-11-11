@@ -323,9 +323,41 @@ export async function translate(file, blocks, o, tr, onProgress) {
     res.push({ ...b, text: await deadline(tr.translate(b.text), 60000, 'The translator stopped responding part way through.') });
     onProgress?.(0.3 + (++n / todo) * 0.7);
   }
+  return saveTranslation(file, res, o);
+}
+
+async function saveTranslation(file, res, o) {
   const base = `${baseName(file.name)}-${o.to}`;
   if (o.format === 'md') return [out(`${base}.md`, new TextEncoder().encode(blocksToMarkdown(res)), 'text/markdown')];
   return [{ name: `${base}.docx`, blob: await buildDocx(res, { title: base }) }];
+}
+
+/* DeepL goes through the relay in vite.config.js, which holds the API key. A plain static
+ * host has no relay, so the status check fails and the on-device translator is used. */
+export async function deeplReady() {
+  try {
+    const r = await deadline(fetch(`${BASE}api/deepl/status`), 4000, 'no answer');
+    return r.ok && (await r.json()).enabled === true;
+  } catch { return false; }
+}
+
+export async function translateWithDeepl(file, blocks, o, onProgress) {
+  const todo = blocks.map((b, i) => [b, i]).filter(([b]) => b.t !== 'page' && b.text.trim());
+  const res = blocks.map((b) => ({ ...b }));
+  let detected = null;
+  for (let s = 0; s < todo.length; s += 50) {
+    const chunk = todo.slice(s, s + 50);
+    const r = await fetch(`${BASE}api/deepl/translate`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: chunk.map(([b]) => b.text), from: o.from, to: o.to }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || 'DeepL could not be reached. Is Sheaf running with npm run serve or npm run dev?');
+    detected ||= data.detected;
+    chunk.forEach(([, i], k) => { res[i].text = data.text[k]; });
+    onProgress?.(Math.min(1, (s + chunk.length) / todo.length));
+  }
+  return { outputs: await saveTranslation(file, res, o), from: o.from === 'auto' ? (detected || '').toLowerCase() : o.from };
 }
 
 export { DOCX };

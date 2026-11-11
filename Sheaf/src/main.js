@@ -200,7 +200,7 @@ function renderFields() {
     'pdf-to-excel': 'Works best on PDFs made from spreadsheets or reports. Numbers become real numbers you can add up.',
     'pdf-to-powerpoint': 'Each page becomes one slide, shown as a picture of the page.',
     summarize: 'Summarizer' in self ? 'Your browser has an on-device model, so the summary is written fresh.' : 'Key sentences are picked from the text. Scanned PDFs need OCR first.',
-    translate: conv.translatorSupported() ? 'Translation runs on this device. The first time you use a language pair, the browser downloads it once.' : 'This browser has no on-device translator. Chrome 138 or newer on a desktop has one built in.',
+    translate: 'DeepL needs your API key in Sheaf/.env and sends the text to DeepL. "On this device" uses Chrome\'s built-in translator (Chrome 138+ on desktop) and sends nothing anywhere.',
   }[tool.id];
   body.innerHTML = (intro ? `<p class="note">${intro}</p>` : '') + fields.map(fieldHtml).join('') +
     (tool.rotatable ? `<div class="field"><span>Rotate all</span><div class="row">
@@ -509,6 +509,11 @@ async function execute(tool, files, opts, progress) {
     }
     case 'translate': {
       const first = await conv.readBlocks(f0);
+      if (opts.engine === 'deepl') {
+        if (!await conv.deeplReady()) throw new Error('DeepL is not set up. Put DEEPL_AUTH_KEY=your-key in Sheaf/.env, restart npm run serve, or switch Translator to "On this device".');
+        const r = await conv.translateWithDeepl(f0, first, opts, progress);
+        return { outputs: r.outputs, summary: `Translated${r.from ? ` from ${langName(r.from)}` : ''} to ${langName(opts.to)} with DeepL.` };
+      }
       const sample = first.filter((b) => b.t !== 'page').map((b) => b.text).join(' ').slice(0, 2000);
       const { tr, from } = await conv.openTranslator(opts, sample, progress);
       try {
