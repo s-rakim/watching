@@ -103,7 +103,7 @@ async function probe(cmd: string, args: string[]): Promise<string | null> {
 let capabilities: Promise<Record<string, unknown>> | null = null;
 function detect() {
   capabilities ??= (async () => {
-    const [qpdfV, gsV, office, ocrV, langs, poppler, py, pairs] = await Promise.all([
+    const [qpdfV, gsV, office, ocrV, langs, poppler, py, deepl, pairs] = await Promise.all([
       probe('qpdf', ['--version']),
       probe('gs', ['--version']),
       probe(process.env.SOFFICE_BIN || 'soffice', ['--version']),
@@ -111,14 +111,16 @@ function detect() {
       probe('tesseract', ['--list-langs']),
       probe('pdftoppm', ['-v']),
       probe(process.env.PYTHON_BIN || 'python3', ['-c', 'import pdf2docx, pdfplumber, openpyxl, PIL; print("ok")']),
+      probe(process.env.PYTHON_BIN || 'python3', ['-c', 'import deepl; print("ok")']),
       probe(process.env.PYTHON_BIN || 'python3', [path.join(PY_DIR, 'text_tools.py'), 'langs']),
     ]);
-    let translatePairs: string[][] = [];
+    let argosPairs: string[][] = [];
     try {
-      translatePairs = JSON.parse(pairs ?? '[]');
+      argosPairs = JSON.parse(pairs ?? '[]');
     } catch {
       /* not installed */
     }
+    const hasDeepl = deepl === 'ok' && !!process.env.DEEPL_AUTH_KEY?.trim();
     return {
       qpdf: !!qpdfV,
       ghostscript: !!gsV,
@@ -127,8 +129,12 @@ function detect() {
       poppler: !!poppler,
       python: py === 'ok',
       chromium: !!browserPath(),
-      translate: translatePairs.length > 0,
-      translatePairs,
+      // Translate has two engines: DeepL (needs the library and a key, which never leaves the
+      // server) and Argos (offline, needs language packs). Either one switches the tool on.
+      deepl: hasDeepl,
+      argos: argosPairs.length > 0,
+      argosPairs,
+      translate: hasDeepl || argosPairs.length > 0,
       languages: (langs ?? '')
         .split('\n')
         .map((l) => l.trim())

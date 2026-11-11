@@ -22,9 +22,9 @@ FROM node:22-bookworm-slim
 # Example: docker compose build --build-arg OCR_LANGS="deu fra spa"
 ARG OCR_LANGS="deu fra spa ita por nld"
 
-# Offline translation for Translate PDF is optional because each language adds a few
-# hundred MB (Argos Translate plus a CPU build of PyTorch). Two-letter codes, space separated.
-# Example: docker compose build --build-arg TRANSLATE_LANGS="es fr de"
+# Offline translation (Argos Translate) is optional because each language adds a few hundred
+# MB, plus a CPU build of PyTorch. Two-letter codes, space separated. DeepL needs none of this.
+# Example: TRANSLATE_LANGS="es fr de" docker compose up -d --build
 ARG TRANSLATE_LANGS=""
 ENV ARGOS_PACKAGES_DIR=/opt/argos/packages \
     ARGOS_DEVICE_TYPE=cpu
@@ -42,7 +42,7 @@ RUN apt-get update \
       fonts-liberation fonts-dejavu-core fonts-noto-core fonts-noto-cjk \
       fonts-crosextra-carlito fonts-crosextra-caladea \
       tini ca-certificates \
- && pip3 install --no-cache-dir --break-system-packages pdf2docx pdfplumber openpyxl \
+ && pip3 install --no-cache-dir --break-system-packages pdf2docx pdfplumber openpyxl deepl \
  && if [ -n "$TRANSLATE_LANGS" ]; then \
       pip3 install --no-cache-dir --break-system-packages torch --index-url https://download.pytorch.org/whl/cpu \
    && pip3 install --no-cache-dir --break-system-packages argostranslate \

@@ -31,6 +31,9 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
+  // The DeepL relay's status answer changes with the server's settings, so never store it.
+  if (url.origin === self.location.origin && url.pathname.includes('/api/')) return;
+
   if (url.origin === self.location.origin) {
     if (req.mode === 'navigate') {
       // Pages: try the network so a new release shows up, fall back to the stored copy.

@@ -9,7 +9,9 @@ export interface Health {
   chromium: boolean;
   languages: string[];
   translate?: boolean;
-  translatePairs?: string[][];
+  deepl?: boolean;
+  argos?: boolean;
+  argosPairs?: string[][];
   maxUploadMb: number;
 }
 

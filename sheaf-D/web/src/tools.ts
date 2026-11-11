@@ -850,7 +850,7 @@ export const TOOLS: ToolDef[] = [
   {
     id: 'translate',
     name: 'Translate PDF',
-    blurb: 'Translate the text of a PDF into another language, offline on this machine.',
+    blurb: 'Translate a PDF with DeepL, or offline on this machine, and choose which.',
     category: 'smart',
     icon: Languages,
     accept: ['pdf'],
@@ -859,9 +859,19 @@ export const TOOLS: ToolDef[] = [
     action: 'Translate',
     working: 'Translating',
     needs: ['python', 'translate'],
-    missingHint: 'Translation is optional because the language packs are large. Rebuild the image with TRANSLATE_LANGS set (the README shows how) to switch it on.',
-    defaults: { from: 'auto', to: 'en', format: 'docx' },
+    missingHint: 'Translate needs a DeepL API key (set DEEPL_AUTH_KEY) or the offline language packs (build with TRANSLATE_LANGS). The README shows both.',
+    defaults: { from: 'auto', to: 'en-us', format: 'pdf', engine: 'auto' },
     fields: [
+      {
+        type: 'choice',
+        key: 'engine',
+        label: 'Translator',
+        options: [
+          { value: 'auto', label: 'Automatic', hint: 'DeepL when its key is set, otherwise offline' },
+          { value: 'deepl', label: 'DeepL', hint: 'Best quality, can keep the layout. Sends the file to DeepL' },
+          { value: 'argos', label: 'Offline', hint: 'Stays on this machine. Text only, no layout' },
+        ],
+      },
       { type: 'translate-language', key: 'from', label: 'From', allowAuto: true },
       { type: 'translate-language', key: 'to', label: 'To' },
       {
@@ -869,12 +879,13 @@ export const TOOLS: ToolDef[] = [
         key: 'format',
         label: 'Save as',
         options: [
-          { value: 'docx', label: 'Word' },
-          { value: 'md', label: 'Markdown' },
+          { value: 'pdf', label: 'PDF', hint: 'Same layout. DeepL only, offline gives Word instead' },
+          { value: 'docx', label: 'Word', hint: 'Just the text, headings and lists' },
+          { value: 'md', label: 'Markdown', hint: 'Just the text, headings and lists' },
         ],
       },
     ],
-    check: (o) => (o.from === o.to ? 'Pick two different languages.' : null),
+    check: (o) => (o.from !== 'auto' && String(o.to).startsWith(o.from) ? 'Pick two different languages.' : null),
   },
   {
     id: 'workflow',

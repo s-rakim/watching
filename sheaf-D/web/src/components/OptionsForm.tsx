@@ -11,14 +11,24 @@ const LANGUAGE_NAMES: Record<string, string> = {
   ind: 'Indonesian', ron: 'Romanian', hun: 'Hungarian', tha: 'Thai',
 };
 
-// ISO 639-1 codes, as Argos Translate names its language packs.
-const TRANSLATE_NAMES: Record<string, string> = {
-  en: 'English', es: 'Spanish', fr: 'French', de: 'German', it: 'Italian', pt: 'Portuguese', nl: 'Dutch', pl: 'Polish',
-  ru: 'Russian', uk: 'Ukrainian', tr: 'Turkish', ar: 'Arabic', hi: 'Hindi', zh: 'Chinese', ja: 'Japanese', ko: 'Korean',
-  sv: 'Swedish', da: 'Danish', fi: 'Finnish', cs: 'Czech', el: 'Greek', he: 'Hebrew', id: 'Indonesian', ro: 'Romanian',
-  hu: 'Hungarian', th: 'Thai', vi: 'Vietnamese', ca: 'Catalan', ga: 'Irish', fa: 'Persian', sk: 'Slovak', az: 'Azerbaijani',
-  eo: 'Esperanto', ms: 'Malay', nb: 'Norwegian', bg: 'Bulgarian', et: 'Estonian', lt: 'Lithuanian', lv: 'Latvian', sl: 'Slovenian',
-};
+// Languages DeepL translates. Sources are plain languages; a few targets come in regional flavours.
+const DEEPL_LANGS: [string, string][] = [
+  ['ar', 'Arabic'], ['bg', 'Bulgarian'], ['zh', 'Chinese'], ['cs', 'Czech'], ['da', 'Danish'], ['nl', 'Dutch'],
+  ['en', 'English'], ['et', 'Estonian'], ['fi', 'Finnish'], ['fr', 'French'], ['de', 'German'], ['el', 'Greek'],
+  ['he', 'Hebrew'], ['hu', 'Hungarian'], ['id', 'Indonesian'], ['it', 'Italian'], ['ja', 'Japanese'], ['ko', 'Korean'],
+  ['lv', 'Latvian'], ['lt', 'Lithuanian'], ['nb', 'Norwegian'], ['pl', 'Polish'], ['pt', 'Portuguese'], ['ro', 'Romanian'],
+  ['ru', 'Russian'], ['sk', 'Slovak'], ['sl', 'Slovenian'], ['es', 'Spanish'], ['sv', 'Swedish'], ['th', 'Thai'],
+  ['tr', 'Turkish'], ['uk', 'Ukrainian'], ['vi', 'Vietnamese'],
+];
+const DEEPL_TARGETS: [string, string][] = DEEPL_LANGS.flatMap(([code, name]): [string, string][] => {
+  if (code === 'en') return [['en-us', 'English (US)'], ['en-gb', 'English (UK)']];
+  if (code === 'pt') return [['pt-br', 'Portuguese (Brazil)'], ['pt-pt', 'Portuguese (Portugal)']];
+  if (code === 'zh') return [['zh-hans', 'Chinese (Simplified)'], ['zh-hant', 'Chinese (Traditional)']];
+  if (code === 'es') return [['es', 'Spanish'], ['es-419', 'Spanish (Latin America)']];
+  return [[code, name]];
+});
+
+const ARGOS_NAMES: Record<string, string> = Object.fromEntries(DEEPL_LANGS.map(([c, n]) => [c, n]).concat([['zt', 'Chinese (Traditional)'], ['ga', 'Irish'], ['ca', 'Catalan'], ['fa', 'Persian'], ['eo', 'Esperanto']]));
 
 const ANCHORS = ['tl', 'tc', 'tr', 'ml', 'mc', 'mr', 'bl', 'bc', 'br'];
 const ANCHOR_NAMES: Record<string, string> = {
@@ -175,15 +185,22 @@ export default function OptionsForm({ fields, values, onChange }: Props) {
               </div>
             );
           } else if (f.type === 'translate-language') {
-            const codes = [...new Set((health?.translatePairs ?? []).flat())].sort((a, b) =>
-              (TRANSLATE_NAMES[a] ?? a).localeCompare(TRANSLATE_NAMES[b] ?? b),
-            );
+            // Automatic uses DeepL when its key is set, so the list follows whichever engine will run
+            const offline = values.engine === 'argos' || (values.engine !== 'deepl' && !health?.deepl && !!health?.argos);
+            const installed = [...new Set((health?.argosPairs ?? []).flat())];
+            const list: [string, string][] = offline
+              ? installed.map((c) => [c, ARGOS_NAMES[c] ?? c])
+              : f.allowAuto
+                ? DEEPL_LANGS
+                : DEEPL_TARGETS;
+            // regional DeepL codes (en-us) show as their plain language in the offline list
+            const shown = offline ? String(value).split('-')[0] : value;
             control = (
-              <select id={id} className="input" value={value} onChange={(e) => set(e.target.value)}>
+              <select id={id} className="input" value={shown} onChange={(e) => set(e.target.value)}>
                 {f.allowAuto && <option value="auto">Detect it</option>}
-                {(codes.length ? codes : ['en']).map((c) => (
+                {list.map(([c, name]) => (
                   <option key={c} value={c}>
-                    {TRANSLATE_NAMES[c] ?? c}
+                    {name}
                   </option>
                 ))}
               </select>
