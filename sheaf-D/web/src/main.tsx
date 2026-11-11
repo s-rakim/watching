@@ -1,6 +1,7 @@
 import '../../design/tokens.css';
 import './styles/app.css';
 import './styles/workspaces.css';
+import './styles/devices.css';
 
 import React from 'react';
 import { createRoot } from 'react-dom/client';

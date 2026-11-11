@@ -9,6 +9,8 @@ Two PDF toolkits that keep your files on your own machine. They share a look and
 | Tools | 27: organise, compress, repair, OCR, JPG ↔ PDF, PDF to Word, Excel, PowerPoint and Markdown, edit, sign, protect, unlock, redact, compare, summarise, translate and more | 32: everything in Sheaf except PDF to Markdown, plus Word, Excel, PowerPoint and HTML to PDF, PDF/A and workflows that chain several tools |
 | Files go | Nowhere. The browser does all the work | To the container on your machine, held in memory and dropped once you've downloaded the result |
 
+Both work on Android, iPhone, iPad, Linux, macOS and Windows: touch-friendly layouts for phones and tablets, drag to reorder with a finger, and a home-screen icon if you want one. Sheaf also works offline once installed. The Sheaf-D image builds for Intel/AMD and ARM (Apple Silicon, Raspberry Pi). Each folder's README has a "Phones, tablets and computers" section with the details and the browser versions.
+
 ## Sheaf (browser)
 
 You need Node 20 or newer.
@@ -85,7 +87,7 @@ New-NetFirewallRule -DisplayName "Allow Port 8080 on Tailscale" -Direction Inbou
 
 #### With HTTPS
 
-Plain HTTP over Tailscale is already encrypted end to end by WireGuard, and every Sheaf tool works over it. The browser will still call the page "Not secure", and some browsers nag about downloads from non-HTTPS pages. To get a real `https://` address, let Tailscale put a certificate in front of the port:
+Plain HTTP over Tailscale is already encrypted end to end by WireGuard, and every Sheaf tool works over it. What you lose without HTTPS is installing Sheaf as an app, using it offline, and the Share button on phones: browsers only allow those on `https://` addresses. The browser will still call the page "Not secure", and some browsers nag about downloads from non-HTTPS pages. To get a real `https://` address, let Tailscale put a certificate in front of the port:
 
 ```powershell
 tailscale serve --bg 8080
