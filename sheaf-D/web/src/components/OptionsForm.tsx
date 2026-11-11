@@ -1,7 +1,7 @@
-import { Check, ImagePlus } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, ImagePlus, Plus, X } from 'lucide-react';
 import { useId } from 'react';
 import { useStore } from '../lib/store';
-import { Field, Options } from '../tools';
+import { CHAINABLE, Field, Options, toolById } from '../tools';
 
 const LANGUAGE_NAMES: Record<string, string> = {
   eng: 'English', deu: 'German', fra: 'French', spa: 'Spanish', ita: 'Italian', por: 'Portuguese', nld: 'Dutch',
@@ -9,6 +9,15 @@ const LANGUAGE_NAMES: Record<string, string> = {
   kor: 'Korean', chi_sim: 'Chinese (Simplified)', chi_tra: 'Chinese (Traditional)', swe: 'Swedish', dan: 'Danish',
   nor: 'Norwegian', fin: 'Finnish', ces: 'Czech', ell: 'Greek', heb: 'Hebrew', swa: 'Swahili', vie: 'Vietnamese',
   ind: 'Indonesian', ron: 'Romanian', hun: 'Hungarian', tha: 'Thai',
+};
+
+// ISO 639-1 codes, as Argos Translate names its language packs.
+const TRANSLATE_NAMES: Record<string, string> = {
+  en: 'English', es: 'Spanish', fr: 'French', de: 'German', it: 'Italian', pt: 'Portuguese', nl: 'Dutch', pl: 'Polish',
+  ru: 'Russian', uk: 'Ukrainian', tr: 'Turkish', ar: 'Arabic', hi: 'Hindi', zh: 'Chinese', ja: 'Japanese', ko: 'Korean',
+  sv: 'Swedish', da: 'Danish', fi: 'Finnish', cs: 'Czech', el: 'Greek', he: 'Hebrew', id: 'Indonesian', ro: 'Romanian',
+  hu: 'Hungarian', th: 'Thai', vi: 'Vietnamese', ca: 'Catalan', ga: 'Irish', fa: 'Persian', sk: 'Slovak', az: 'Azerbaijani',
+  eo: 'Esperanto', ms: 'Malay', nb: 'Norwegian', bg: 'Bulgarian', et: 'Estonian', lt: 'Lithuanian', lv: 'Latvian', sl: 'Slovenian',
 };
 
 const ANCHORS = ['tl', 'tc', 'tr', 'ml', 'mc', 'mr', 'bl', 'bc', 'br'];
@@ -165,6 +174,22 @@ export default function OptionsForm({ fields, values, onChange }: Props) {
                 })}
               </div>
             );
+          } else if (f.type === 'translate-language') {
+            const codes = [...new Set((health?.translatePairs ?? []).flat())].sort((a, b) =>
+              (TRANSLATE_NAMES[a] ?? a).localeCompare(TRANSLATE_NAMES[b] ?? b),
+            );
+            control = (
+              <select id={id} className="input" value={value} onChange={(e) => set(e.target.value)}>
+                {f.allowAuto && <option value="auto">Detect it</option>}
+                {(codes.length ? codes : ['en']).map((c) => (
+                  <option key={c} value={c}>
+                    {TRANSLATE_NAMES[c] ?? c}
+                  </option>
+                ))}
+              </select>
+            );
+          } else if (f.type === 'steps') {
+            control = <StepsEditor steps={value ?? []} onChange={set} />;
           } else if (f.type === 'file') {
             const file = value as File | undefined;
             control = (
@@ -191,6 +216,85 @@ export default function OptionsForm({ fields, values, onChange }: Props) {
             </div>
           );
         })}
+    </div>
+  );
+}
+
+interface Step {
+  tool: string;
+  options: Options;
+}
+
+/** The step list behind Workflow: pick a tool per step and set its options inline. */
+function StepsEditor({ steps, onChange }: { steps: Step[]; onChange: (s: Step[]) => void }) {
+  const put = (i: number, next: Step | null) => {
+    const copy = [...steps];
+    if (next) copy[i] = next;
+    else copy.splice(i, 1);
+    onChange(copy);
+  };
+  const move = (i: number, by: number) => {
+    const copy = [...steps];
+    const [s] = copy.splice(i, 1);
+    copy.splice(i + by, 0, s);
+    onChange(copy);
+  };
+  const fresh = (id: string): Step => ({ tool: id, options: { ...(toolById(id)?.defaults ?? {}) } });
+  return (
+    <div className="steps">
+      <ol className="step-list">
+        {steps.map((s, i) => {
+          const t = toolById(s.tool);
+          // image watermarks need a second upload, which a chained step can't take
+          const fields = (t?.fields ?? [])
+            .filter((f) => f.type !== 'file' && !(s.tool === 'watermark' && f.key === 'kind'))
+            .map((f) => (s.tool === 'watermark' ? { ...f, showIf: f.showIf ? (o: Options) => f.showIf!({ ...o, kind: 'text' }) : undefined } : f));
+          return (
+            <li key={i} className="step">
+              <div className="step-head">
+                <span className="step-num mono">{i + 1}</span>
+                <select
+                  className="input"
+                  aria-label={`Tool for step ${i + 1}`}
+                  value={s.tool}
+                  onChange={(e) => put(i, fresh(e.target.value))}
+                >
+                  {CHAINABLE.map((id) => (
+                    <option key={id} value={id}>
+                      {toolById(id)?.name ?? id}
+                    </option>
+                  ))}
+                </select>
+                <button type="button" className="icon-btn" aria-label={`Move step ${i + 1} up`} disabled={i === 0} onClick={() => move(i, -1)}>
+                  <ArrowUp size={16} strokeWidth={2} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  aria-label={`Move step ${i + 1} down`}
+                  disabled={i === steps.length - 1}
+                  onClick={() => move(i, 1)}
+                >
+                  <ArrowDown size={16} strokeWidth={2} />
+                </button>
+                <button type="button" className="icon-btn" aria-label={`Remove step ${i + 1}`} onClick={() => put(i, null)}>
+                  <X size={16} strokeWidth={2} />
+                </button>
+              </div>
+              {fields.length > 0 && (
+                <div className="step-body">
+                  <OptionsForm fields={fields} values={s.options} onChange={(patch) => put(i, { ...s, options: { ...s.options, ...patch } })} />
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+      {steps.length < 8 && (
+        <button type="button" className="btn btn-secondary step-add" onClick={() => onChange([...steps, fresh(steps.length ? 'page-numbers' : 'compress')])}>
+          <Plus size={16} strokeWidth={2.2} /> Add a step
+        </button>
+      )}
     </div>
   );
 }

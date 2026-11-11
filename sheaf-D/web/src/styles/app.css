@@ -1669,3 +1669,53 @@ input[type='color'] {
     animation: pulse 2s ease-in-out infinite;
   }
 }
+
+/* Workflow steps */
+.steps {
+  display: grid;
+  gap: calc(var(--g) * 2);
+}
+.step-list {
+  display: grid;
+  gap: calc(var(--g) * 2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.step {
+  border: 1px solid var(--color-border-dark);
+  border-radius: var(--border-radius-container);
+  background: var(--color-main-background);
+  overflow: hidden;
+}
+.step-head {
+  display: flex;
+  align-items: center;
+  gap: var(--g);
+  padding: var(--g);
+  background: var(--color-background-hover);
+}
+.step-head .input {
+  flex: 1;
+  min-width: 0;
+}
+.step-num {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent-soft, var(--color-primary-element-light));
+  color: var(--accent-text, var(--color-primary-element-light-text));
+  font-weight: var(--font-weight-heading);
+}
+.step-body {
+  padding: calc(var(--g) * 3);
+}
+.step-body .options {
+  gap: calc(var(--g) * 3);
+}
+.step-add {
+  justify-self: start;
+}
