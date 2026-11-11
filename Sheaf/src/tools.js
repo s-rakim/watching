@@ -221,8 +221,8 @@ export const TOOLS = [
       { key: 'from', label: 'From', type: 'select', default: 'auto', options: [['auto', 'Detect it'], ...LANG_OPTIONS] },
       { key: 'to', label: 'To', type: 'select', default: 'en', options: LANG_OPTIONS },
       { key: 'format', label: 'Save as', type: 'segmented', default: 'docx', options: [['docx', 'Word'], ['md', 'Markdown']] },
-      { key: 'engine', label: 'Translator', type: 'segmented', default: 'deepl', options: [['deepl', 'DeepL'], ['browser', 'On this device']],
-        hint: 'DeepL sends the text to DeepL. On this device keeps it in the browser.' },
+      { key: 'engine', label: 'Translator', type: 'segmented', default: 'auto', options: [['auto', 'Automatic'], ['deepl', 'DeepL'], ['browser', 'On this device']],
+        hint: 'Automatic uses DeepL when your key is set up, otherwise the browser\'s own translator. DeepL sends the text to DeepL; On this device keeps it in the browser.' },
     ],
   },
 ];

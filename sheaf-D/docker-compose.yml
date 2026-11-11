@@ -1,6 +1,10 @@
 services:
   sheaf-d:
-    build: .
+    build:
+      context: .
+      args:
+        # Offline translation packs, e.g. TRANSLATE_LANGS="es fr de" docker compose up -d --build
+        TRANSLATE_LANGS: ${TRANSLATE_LANGS:-}
     image: sheaf-d:latest
     container_name: sheaf-d
     restart: unless-stopped

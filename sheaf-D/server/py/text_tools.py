@@ -1,13 +1,15 @@
 """Summarise or translate the text of a PDF.
 
   text_tools.py summarize SRC DST LENGTH            -> Markdown summary
-  text_tools.py translate SRC DST FROM TO FORMAT    -> translated .pdf, .docx or .md
+  text_tools.py translate SRC DST FROM TO FORMAT ENGINE -> translated .pdf, .docx or .md
+  text_tools.py langs                               -> JSON list of installed offline (Argos) pairs
 
 Summaries are extractive: sentences are scored by how many of the document's key terms
-they carry and the best ones are kept in reading order. Translation goes through the DeepL
-API (the deepl package) with the key in DEEPL_AUTH_KEY. A PDF comes back as a PDF with its
-layout kept; Word and Markdown output translate the extracted text instead.
+they carry and the best ones are kept in reading order. Translation has two engines that can
+be used interchangeably: DeepL (online, key in DEEPL_AUTH_KEY, can hand back a PDF with its
+layout kept) and Argos Translate (offline, needs language packs, text output only).
 """
+import json
 import math
 import os
 import re
@@ -144,7 +146,11 @@ def deepl_target(code):
     return {"EN": "EN-US", "PT": "PT-PT", "ZH": "ZH-HANS"}.get(code, code)
 
 
-def cmd_translate(src, dst, source, target, fmt):
+def cmd_translate(src, dst, source, target, fmt, engine="deepl"):
+    (translate_argos if engine == "argos" else translate_deepl)(src, dst, source, target, fmt)
+
+
+def translate_deepl(src, dst, source, target, fmt):
     try:
         import deepl
     except ImportError:
@@ -181,6 +187,72 @@ def cmd_translate(src, dst, source, target, fmt):
         fail(f"DeepL could not translate this PDF: {e}. Try Word or Markdown output instead.")
     except deepl.DeepLException as e:
         fail(f"DeepL returned an error: {e}")
+    if fmt == "md":
+        write_md(out, dst)
+    else:
+        write_docx(out, dst)
+
+
+# A cheap language guess for "Detect it" when translating offline: count common words.
+HINTS = {
+    "en": "the and of to is in that for with this are was on as be by",
+    "es": "el la de que y en los del se las por un para con una es",
+    "fr": "le la de et les des est que un une pour dans qui sur pas du",
+    "de": "der die und das ist nicht ein eine zu den mit von sich auf für",
+    "it": "il di che la per un una non sono con del della è le gli",
+    "pt": "o a de que e do da em um uma para com não os no se",
+    "nl": "de het een en van is dat op te in niet zijn met voor",
+}
+
+
+def guess(text, choices):
+    ws = Counter(re.findall(r"[^\W\d_]+", text.lower()))
+    scored = [(sum(ws[w] for w in HINTS[c].split()), c) for c in choices if c in HINTS]
+    scored.sort(reverse=True)
+    return scored[0][1] if scored and scored[0][0] > 3 else None
+
+
+def installed():
+    try:
+        from argostranslate import translate
+    except ImportError:
+        return []
+    langs = translate.get_installed_languages()
+    return [[a.code, b.code] for a in langs for b in langs if a.code != b.code and a.get_translation(b) is not None]
+
+
+def translate_argos(src, dst, source, target, fmt):
+    try:
+        from argostranslate import translate
+    except ImportError:
+        fail("Offline translation is not installed. Rebuild the Docker image with TRANSLATE_LANGS set, see the README.")
+    if fmt == "pdf":
+        fail("Offline translation can't keep the layout. Save as Word or Markdown, or use DeepL for a PDF.")
+    # DeepL-style codes like en-us or zh-hans become Argos's plain ones
+    target = target.lower().split("-")[0]
+    source = source.lower().split("-")[0]
+    blocks, _ = read_blocks(src)
+    text = " ".join(b["text"] for b in blocks if b["t"] != "page")
+    if not text.strip():
+        fail("This PDF has no text to translate. If it is a scan, run OCR PDF on it first.")
+    codes = {l.code: l for l in translate.get_installed_languages()}
+    if source == "auto":
+        source = guess(text[:4000], [c for c in codes if c != target])
+        if not source:
+            fail("Could not tell which language the PDF is in. Pick it under From.")
+    if source == target:
+        fail("The PDF is already in that language.")
+    if source not in codes or target not in codes:
+        fail(f"The {source} to {target} language pack is not installed.")
+    tr = codes[source].get_translation(codes[target])
+    if tr is None:
+        # Argos can pivot through English when both directions are installed
+        if "en" in codes and codes[source].get_translation(codes["en"]) and codes["en"].get_translation(codes[target]):
+            a, b = codes[source].get_translation(codes["en"]), codes["en"].get_translation(codes[target])
+            tr = type("Pivot", (), {"translate": lambda self, t: b.translate(a.translate(t))})()
+        else:
+            fail(f"The {source} to {target} language pack is not installed.")
+    out = [dict(b, text=tr.translate(b["text"])) if b["t"] != "page" else b for b in blocks]
     if fmt == "md":
         write_md(out, dst)
     else:
@@ -234,4 +306,6 @@ if __name__ == "__main__":
     if cmd == "summarize":
         cmd_summarize(*sys.argv[2:5])
     elif cmd == "translate":
-        cmd_translate(*sys.argv[2:7])
+        cmd_translate(*sys.argv[2:8])
+    elif cmd == "langs":
+        print(json.dumps(installed()))

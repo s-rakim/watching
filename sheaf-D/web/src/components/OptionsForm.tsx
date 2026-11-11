@@ -28,6 +28,8 @@ const DEEPL_TARGETS: [string, string][] = DEEPL_LANGS.flatMap(([code, name]): [s
   return [[code, name]];
 });
 
+const ARGOS_NAMES: Record<string, string> = Object.fromEntries(DEEPL_LANGS.map(([c, n]) => [c, n]).concat([['zt', 'Chinese (Traditional)'], ['ga', 'Irish'], ['ca', 'Catalan'], ['fa', 'Persian'], ['eo', 'Esperanto']]));
+
 const ANCHORS = ['tl', 'tc', 'tr', 'ml', 'mc', 'mr', 'bl', 'bc', 'br'];
 const ANCHOR_NAMES: Record<string, string> = {
   tl: 'Top left', tc: 'Top centre', tr: 'Top right', ml: 'Middle left', mc: 'Centre', mr: 'Middle right',
@@ -183,10 +185,20 @@ export default function OptionsForm({ fields, values, onChange }: Props) {
               </div>
             );
           } else if (f.type === 'translate-language') {
+            // Automatic uses DeepL when its key is set, so the list follows whichever engine will run
+            const offline = values.engine === 'argos' || (values.engine !== 'deepl' && !health?.deepl && !!health?.argos);
+            const installed = [...new Set((health?.argosPairs ?? []).flat())];
+            const list: [string, string][] = offline
+              ? installed.map((c) => [c, ARGOS_NAMES[c] ?? c])
+              : f.allowAuto
+                ? DEEPL_LANGS
+                : DEEPL_TARGETS;
+            // regional DeepL codes (en-us) show as their plain language in the offline list
+            const shown = offline ? String(value).split('-')[0] : value;
             control = (
-              <select id={id} className="input" value={value} onChange={(e) => set(e.target.value)}>
+              <select id={id} className="input" value={shown} onChange={(e) => set(e.target.value)}>
                 {f.allowAuto && <option value="auto">Detect it</option>}
-                {(f.allowAuto ? DEEPL_LANGS : DEEPL_TARGETS).map(([c, name]) => (
+                {list.map(([c, name]) => (
                   <option key={c} value={c}>
                     {name}
                   </option>

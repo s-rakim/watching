@@ -850,7 +850,7 @@ export const TOOLS: ToolDef[] = [
   {
     id: 'translate',
     name: 'Translate PDF',
-    blurb: 'Translate a PDF with DeepL and get it back with the layout kept.',
+    blurb: 'Translate a PDF with DeepL, or offline on this machine, and choose which.',
     category: 'smart',
     icon: Languages,
     accept: ['pdf'],
@@ -859,9 +859,19 @@ export const TOOLS: ToolDef[] = [
     action: 'Translate',
     working: 'Translating',
     needs: ['python', 'translate'],
-    missingHint: 'Translate uses DeepL and needs your DeepL API key. Set DEEPL_AUTH_KEY for Sheaf-D (the README shows how) and restart it.',
-    defaults: { from: 'auto', to: 'en-us', format: 'pdf' },
+    missingHint: 'Translate needs a DeepL API key (set DEEPL_AUTH_KEY) or the offline language packs (build with TRANSLATE_LANGS). The README shows both.',
+    defaults: { from: 'auto', to: 'en-us', format: 'pdf', engine: 'auto' },
     fields: [
+      {
+        type: 'choice',
+        key: 'engine',
+        label: 'Translator',
+        options: [
+          { value: 'auto', label: 'Automatic', hint: 'DeepL when its key is set, otherwise offline' },
+          { value: 'deepl', label: 'DeepL', hint: 'Best quality, can keep the layout. Sends the file to DeepL' },
+          { value: 'argos', label: 'Offline', hint: 'Stays on this machine. Text only, no layout' },
+        ],
+      },
       { type: 'translate-language', key: 'from', label: 'From', allowAuto: true },
       { type: 'translate-language', key: 'to', label: 'To' },
       {
@@ -869,11 +879,10 @@ export const TOOLS: ToolDef[] = [
         key: 'format',
         label: 'Save as',
         options: [
-          { value: 'pdf', label: 'PDF', hint: 'Same layout, translated in place' },
+          { value: 'pdf', label: 'PDF', hint: 'Same layout. DeepL only, offline gives Word instead' },
           { value: 'docx', label: 'Word', hint: 'Just the text, headings and lists' },
           { value: 'md', label: 'Markdown', hint: 'Just the text, headings and lists' },
         ],
-        hint: 'Your file is sent to DeepL to be translated. Every other tool keeps it on this machine.',
       },
     ],
     check: (o) => (o.from !== 'auto' && String(o.to).startsWith(o.from) ? 'Pick two different languages.' : null),

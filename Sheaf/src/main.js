@@ -509,7 +509,8 @@ async function execute(tool, files, opts, progress) {
     }
     case 'translate': {
       const first = await conv.readBlocks(f0);
-      if (opts.engine === 'deepl') {
+      const useDeepl = opts.engine === 'deepl' || (opts.engine !== 'browser' && await conv.deeplReady());
+      if (useDeepl) {
         if (!await conv.deeplReady()) throw new Error('DeepL is not set up. Put DEEPL_AUTH_KEY=your-key in Sheaf/.env, restart npm run serve, or switch Translator to "On this device".');
         const r = await conv.translateWithDeepl(f0, first, opts, progress);
         return { outputs: r.outputs, summary: `Translated${r.from ? ` from ${langName(r.from)}` : ''} to ${langName(opts.to)} with DeepL.` };
