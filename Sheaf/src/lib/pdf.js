@@ -1,6 +1,9 @@
 import { PDFDocument } from '@cantoo/pdf-lib';
-import * as pdfjs from 'pdfjs-dist';
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+// The legacy build carries polyfills for the iOS 15/16 and older Firefox ESR releases
+// that the modern build quietly breaks on. It costs a little size, nothing else.
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
+import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
+import { fitArea } from './device.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -32,7 +35,9 @@ export async function loadPdf(bytes, opts = {}) {
 export async function renderPage(pdf, pageNumber, { scale = 1, maxWidth, rotation = 0 } = {}) {
   const page = await pdf.getPage(pageNumber);
   let vp = page.getViewport({ scale: 1, rotation: (page.rotate + rotation) % 360 });
-  const s = maxWidth ? Math.min(maxWidth / vp.width, 4) : scale;
+  let s = maxWidth ? Math.min(maxWidth / vp.width, 4) : scale;
+  // Huge pages (posters, plans) would ask for a canvas bigger than phones can hold.
+  s *= fitArea(vp.width * s, vp.height * s);
   vp = page.getViewport({ scale: s, rotation: (page.rotate + rotation) % 360 });
   const canvas = document.createElement('canvas');
   canvas.width = Math.ceil(vp.width);
@@ -41,14 +46,12 @@ export async function renderPage(pdf, pageNumber, { scale = 1, maxWidth, rotatio
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   await page.render({ canvasContext: ctx, viewport: vp, canvas }).promise;
+  // The scale actually used, which is lower than asked for on oversized pages.
+  canvas.pdfScale = s;
   return canvas;
 }
 
-export function canvasToBlob(canvas, type = 'image/jpeg', quality = 0.9) {
-  return new Promise((res, rej) =>
-    canvas.toBlob((b) => (b ? res(b) : rej(new Error('Could not encode image'))), type, quality)
-  );
-}
+export { encodeCanvas as canvasToBlob } from './device.js';
 
 export async function blobBytes(blob) {
   return new Uint8Array(await blob.arrayBuffer());

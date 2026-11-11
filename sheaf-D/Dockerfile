@@ -1,5 +1,10 @@
-# Build the web app
-FROM node:22-bookworm-slim AS web
+# syntax=docker/dockerfile:1
+# Builds for linux/amd64 and linux/arm64 (Apple Silicon, Raspberry Pi 4/5 on a 64-bit
+# OS, Ampere and Graviton servers). See "Other CPUs" in the README.
+
+# Build the web app. Its output is plain HTML, CSS and JS, the same on every CPU, so this
+# stage always runs on the build machine's own architecture, even when cross-building.
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS web
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY web/package.json web/
@@ -9,12 +14,21 @@ COPY design design
 COPY web web
 RUN npm run build --workspace web
 
-# Runtime: the server plus every tool it shells out to
+# Runtime: the server plus every tool it shells out to. Every package below exists for
+# both amd64 and arm64 in Debian, and pip finds arm64 wheels for the Python libraries.
 FROM node:22-bookworm-slim
 
 # Extra Tesseract language packs, space separated. English is always there.
 # Example: docker compose build --build-arg OCR_LANGS="deu fra spa"
 ARG OCR_LANGS="deu fra spa ita por nld"
+
+# Offline translation (Argos Translate) is optional because each language adds a few hundred
+# MB, plus a CPU build of PyTorch. Two-letter codes, space separated. DeepL needs none of this.
+# Example: TRANSLATE_LANGS="es fr de" docker compose up -d --build
+ARG TRANSLATE_LANGS=""
+ENV ARGOS_PACKAGES_DIR=/opt/argos/packages \
+    ARGOS_DEVICE_TYPE=cpu
+COPY server/py/install_argos.py /tmp/install_argos.py
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
@@ -28,7 +42,15 @@ RUN apt-get update \
       fonts-liberation fonts-dejavu-core fonts-noto-core fonts-noto-cjk \
       fonts-crosextra-carlito fonts-crosextra-caladea \
       tini ca-certificates \
- && pip3 install --no-cache-dir --break-system-packages pdf2docx pdfplumber openpyxl \
+ && pip3 install --no-cache-dir --break-system-packages pdf2docx pdfplumber openpyxl deepl \
+ && if [ -n "$TRANSLATE_LANGS" ]; then \
+      pip3 install --no-cache-dir --break-system-packages torch --index-url https://download.pytorch.org/whl/cpu \
+   && pip3 install --no-cache-dir --break-system-packages argostranslate \
+   && mkdir -p "$ARGOS_PACKAGES_DIR" \
+   && python3 /tmp/install_argos.py $TRANSLATE_LANGS \
+   && chmod -R a+rX /opt/argos; \
+    fi \
+ && rm -f /tmp/install_argos.py \
  && apt-get purge -y python3-pip \
  && apt-get autoremove -y \
  && rm -rf /var/lib/apt/lists/* /root/.cache

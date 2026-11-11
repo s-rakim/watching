@@ -1,5 +1,7 @@
 // Page-by-page editor used by Edit, Sign, Redact and Crop. Items live in page-relative
 // coordinates (0..1, origin top-left of the page as shown) so they survive resizes.
+import { PLAIN_EDIT } from './lib/device.js';
+
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const LABELS = {
@@ -7,7 +9,16 @@ const LABELS = {
   signature: ['pen', 'Signature'], date: ['calendar', 'Date'], redact: ['redact', 'Redact area'], crop: ['crop', 'Crop frame'],
   edittext: ['editText', 'Edit text'], ink: ['pencil', 'Draw'], highlight: ['highlighter', 'Highlight'],
 };
-const HIGHLIGHT = '#ffe14d';
+// Highlighter inks are drawn at 45% with multiply, so they need to be light and saturated.
+const HIGHLIGHTS = [['#ffe14d', 'Yellow'], ['#8be38f', 'Green'], ['#7fd0ff', 'Blue'], ['#ff9fd2', 'Pink'], ['#ffb763', 'Orange'], ['#c9a7ff', 'Purple']];
+const INKS = [['#111827', 'Black'], ['#d14343', 'Red'], ['#00679e', 'Blue'], ['#1f8a4c', 'Green'], ['#e8730c', 'Orange'], ['#7c3aed', 'Purple'], ['#ffffff', 'White']];
+const HIGHLIGHT_ALPHA = 0.45;
+const tint = (hex, a) => {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgb(${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255} / ${a * 100}%)`;
+};
+// Items whose colour the user picks. White-out, redact and crop always look the same.
+const COLOURED = new Set(['text', 'ink', 'rect', 'highlight']);
 
 /**
  * Lines of text already on a page, in the same 0..1 page coordinates the editor uses.
@@ -63,7 +74,7 @@ export function mountCanvasEditor(stage, session, { icon, renderPage }) {
   const palette = session.tool.palette;
   const st = {
     page: 0, items: [], active: palette[0] === 'crop' ? null : palette[0], sel: null,
-    color: '#111827', fontSize: 16, font: 'sans', signature: null, seq: 0, inkWidth: 3,
+    color: INKS[0][0], highlight: HIGHLIGHTS[0][0], fontSize: 16, font: 'sans', signature: null, seq: 0, inkWidth: 3,
     lines: new Map(), // page index -> existing text lines, read lazily
   };
   if (palette[0] === 'crop') st.items.push({ id: ++st.seq, type: 'crop', page: -1, x: 0.08, y: 0.08, w: 0.84, h: 0.84 });
@@ -74,6 +85,7 @@ export function mountCanvasEditor(stage, session, { icon, renderPage }) {
         <button class="btn btn-ghost" data-nav="-1" aria-label="Previous page">${icon('chevronLeft', 18)}</button>
         <span class="ed-count" aria-live="polite"></span>
         <button class="btn btn-ghost" data-nav="1" aria-label="Next page">${icon('chevronRight', 18)}</button>
+        <div class="ed-tools" role="toolbar" aria-label="Tools"></div>
       </div>
       <div class="ed-scroll"><div class="ed-page"><div class="ed-layer"></div></div></div>
     </div>`;
@@ -81,7 +93,9 @@ export function mountCanvasEditor(stage, session, { icon, renderPage }) {
   const layer = stage.querySelector('.ed-layer');
   const count = stage.querySelector('.ed-count');
 
+  let shownWidth = 0;
   async function show() {
+    shownWidth = stage.clientWidth;
     count.textContent = `Page ${st.page + 1} of ${file.pageCount}`;
     const width = Math.min(stage.querySelector('.ed-scroll').clientWidth - 32, 860);
     const canvas = await renderPage(file.pdf, st.page + 1, { maxWidth: Math.max(280, width) * (window.devicePixelRatio || 1) });
@@ -113,14 +127,14 @@ export function mountCanvasEditor(stage, session, { icon, renderPage }) {
       const grip = it.type === 'text' ? '' : '<i class="it-grip"></i>';
       if (it.type === 'text') {
         const [fam, weight] = (it.font || 'sans').split('-');
-        return `<div class="it it-text${sel}" data-id="${it.id}" style="${box};font-size:${it.fontSize * H}px;color:${it.color};font-family:${FONT_CSS[fam] || FONT_CSS.sans};font-weight:${weight ? 700 : 400}"><div class="it-edit" contenteditable="plaintext-only" spellcheck="false">${esc(it.text)}</div>${del}</div>`;
+        return `<div class="it it-text${sel}" data-id="${it.id}" style="${box};font-size:${it.fontSize * H}px;color:${it.color};font-family:${FONT_CSS[fam] || FONT_CSS.sans};font-weight:${weight ? 700 : 400}"><div class="it-edit" contenteditable="${PLAIN_EDIT}" spellcheck="false">${esc(it.text)}</div>${del}</div>`;
       }
       if (it.type === 'ink') {
         const W = pageEl.clientWidth;
         const pts = it.points.map(([px, py]) => `${(px * it.w * W).toFixed(1)},${(py * it.h * H).toFixed(1)}`).join(' ');
         return `<div class="it it-ink${sel}" data-id="${it.id}" style="${box}"><svg width="100%" height="100%" overflow="visible" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${it.color}" stroke-width="${it.width * H}" stroke-linecap="round" stroke-linejoin="round"/></svg>${del}</div>`;
       }
-      if (it.type === 'highlight') return `<div class="it it-highlight${sel}" data-id="${it.id}" style="${box}">${del}${grip}</div>`;
+      if (it.type === 'highlight') return `<div class="it it-highlight${sel}" data-id="${it.id}" style="${box};background:${tint(it.color, HIGHLIGHT_ALPHA)}">${del}${grip}</div>`;
       if (it.type === 'image') return `<div class="it it-image${sel}" data-id="${it.id}" style="${box}"><img src="${it.url}" alt="" draggable="false"/>${del}${grip}</div>`;
       const style = it.type === 'rect' ? `border:2px solid ${it.color};${it.fill ? `background:${it.color}` : ''}` : '';
       return `<div class="it it-${it.type}${sel}" data-id="${it.id}" style="${box};${style}">${del}${grip}</div>`;
@@ -135,16 +149,39 @@ export function mountCanvasEditor(stage, session, { icon, renderPage }) {
   };
   const byEl = (el) => st.items.find((i) => i.id === Number(el?.dataset.id));
 
+  /** Track one pointer until it lifts or the browser takes it back (pointercancel). */
+  function follow(e, onMove, onEnd) {
+    const id = e.pointerId;
+    const move = (ev) => { if (ev.pointerId === id) onMove(ev); };
+    const end = (ev) => {
+      if (ev.pointerId !== id) return;
+      removeEventListener('pointermove', move);
+      removeEventListener('pointerup', end);
+      removeEventListener('pointercancel', end);
+      onEnd(ev);
+    };
+    addEventListener('pointermove', move);
+    addEventListener('pointerup', end);
+    addEventListener('pointercancel', end);
+  }
+  const TAP_TOOLS = new Set(['text', 'date', 'signature', 'image', 'edittext']);
+
   layer.addEventListener('pointerdown', (e) => {
+    // A second finger or the palm resting next to a stylus should not start anything.
+    if (!e.isPrimary || e.button > 0) return;
     const itEl = e.target.closest('.it');
-    if (e.target.closest('.it-del')) { remove(byEl(itEl)); return draw(); }
-    const hit = e.target.closest('.txt-hit');
-    if (hit) { e.preventDefault(); return editLine(Number(hit.dataset.line)); }
+    if (e.target.closest('.it-del, .txt-hit')) return; // handled on click
     const start = rel(e);
     if (itEl) {
       const it = byEl(itEl);
+      const wasSel = st.sel === it.id;
       st.sel = it.id;
       layer.querySelectorAll('.it').forEach((n) => n.classList.toggle('sel', n === itEl));
+      // Picking an item shows its own colour in the panel, so changing it is one click.
+      if (!wasSel && COLOURED.has(it.type)) {
+        if (it.type === 'highlight') st.highlight = it.color; else st.color = it.color;
+        mountTools();
+      }
       if (e.target.closest('.it-edit') && document.activeElement === e.target.closest('.it-edit')) return;
       const resizing = !!e.target.closest('.it-grip');
       const o = { ...it };
@@ -163,15 +200,39 @@ export function mountCanvasEditor(stage, session, { icon, renderPage }) {
         if (resizing) { itEl.style.width = `${it.w * 100}%`; itEl.style.height = `${it.h * 100}%`; }
         if (it.patch) draw();
       };
-      const up = () => { window.removeEventListener('pointermove', move); if (!moved && it.type === 'text') itEl.querySelector('.it-edit').focus(); };
-      window.addEventListener('pointermove', move);
-      window.addEventListener('pointerup', up, { once: true });
+      follow(e, move, () => {
+        if (moved) draggedAt = performance.now();
+        else if (it.type === 'text') itEl.querySelector('.it-edit').focus();
+      });
       if (!e.target.closest('.it-edit')) e.preventDefault();
       return;
     }
-    st.sel = null;
     const tool = st.active;
-    if (!tool) return draw();
+    // Taps that place things wait for the click, so a finger that starts a scroll
+    // doesn't drop text or a signature on the page by accident.
+    if (!tool || TAP_TOOLS.has(tool)) {
+      if (st.sel) { st.sel = null; draw(); }
+      return;
+    }
+    st.sel = null;
+    drag(e, tool, start);
+  });
+
+  let draggedAt = 0;
+  layer.addEventListener('click', (e) => {
+    const del = e.target.closest('.it-del');
+    if (del) { remove(byEl(del.closest('.it'))); return draw(); }
+    // The click that ends a drag is not a request to place something new.
+    if (performance.now() - draggedAt < 400) return;
+    const hit = e.target.closest('.txt-hit');
+    if (hit) return editLine(Number(hit.dataset.line));
+    if (e.target.closest('.it')) return;
+    const tool = st.active;
+    if (tool && TAP_TOOLS.has(tool) && tool !== 'edittext') place(tool, rel(e));
+  });
+
+  /** Put text, a date, a signature or an image where the page was tapped or clicked. */
+  function place(tool, start) {
     if (tool === 'text' || tool === 'date') {
       const it = { id: ++st.seq, type: 'text', page: st.page, x: start.x, y: start.y, w: 0, h: 0, text: tool === 'date' ? new Date().toLocaleDateString() : 'Text', color: st.color, fontSize: st.fontSize / 792, font: st.font };
       st.items.push(it); st.sel = it.id; draw();
@@ -180,7 +241,6 @@ export function mountCanvasEditor(stage, session, { icon, renderPage }) {
         ed.focus();
         document.getSelection().selectAllChildren(ed);
       }
-      e.preventDefault();
       return;
     }
     if (tool === 'signature' || tool === 'image') {
@@ -190,9 +250,12 @@ export function mountCanvasEditor(stage, session, { icon, renderPage }) {
       const hgt = (w * pageEl.clientWidth * src.h / src.w) / pageEl.clientHeight;
       const it = { id: ++st.seq, type: 'image', page: st.page, x: Math.min(start.x, 1 - w), y: Math.min(start.y, 1 - hgt), w, h: hgt, url: src.url, bytes: src.bytes, mime: src.mime };
       st.items.push(it); st.sel = it.id;
-      return draw();
+      draw();
     }
-    if (tool === 'edittext') return draw();
+  }
+
+  /** Freehand ink, or a box dragged out for shapes, white-out, redaction and highlights. */
+  function drag(e, tool, start) {
     if (tool === 'ink') {
       const raw = [[start.x, start.y]];
       const ns = 'http://www.w3.org/2000/svg';
@@ -202,9 +265,12 @@ export function mountCanvasEditor(stage, session, { icon, renderPage }) {
       Object.entries({ fill: 'none', stroke: st.color, 'stroke-width': st.inkWidth, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }).forEach(([k, v]) => line.setAttribute(k, v));
       svg.append(line); layer.append(svg);
       const W = layer.clientWidth, Hh = layer.clientHeight;
-      const move = (ev) => { const p = rel(ev); raw.push([p.x, p.y]); line.setAttribute('points', raw.map(([a, b]) => `${a * W},${b * Hh}`).join(' ')); };
+      const move = (ev) => {
+        // Pens and fast fingers report more points than there are frames. Keep them all.
+        for (const c of ev.getCoalescedEvents?.() || [ev]) { const p = rel(c); raw.push([p.x, p.y]); }
+        line.setAttribute('points', raw.map(([a, b]) => `${a * W},${b * Hh}`).join(' '));
+      };
       const up = () => {
-        window.removeEventListener('pointermove', move);
         svg.remove();
         if (raw.length < 2) return draw();
         const xs = raw.map((q) => q[0]), ys = raw.map((q) => q[1]);
@@ -214,20 +280,18 @@ export function mountCanvasEditor(stage, session, { icon, renderPage }) {
           points: raw.map(([a, b]) => [(a - x0) / w, (b - y0) / hgt]) });
         draw(); mountTools();
       };
-      window.addEventListener('pointermove', move);
-      window.addEventListener('pointerup', up, { once: true });
+      follow(e, move, up);
       e.preventDefault();
       return;
     }
     // rect, whiteout, redact, highlight: drag out a box
-    const it = { id: ++st.seq, type: tool, page: st.page, x: start.x, y: start.y, w: 0, h: 0, color: tool === 'highlight' ? HIGHLIGHT : st.color, fill: false };
+    const it = { id: ++st.seq, type: tool, page: st.page, x: start.x, y: start.y, w: 0, h: 0, color: tool === 'highlight' ? st.highlight : st.color, fill: false };
     st.items.push(it);
     const move = (ev) => { const p = rel(ev); it.x = Math.min(start.x, p.x); it.y = Math.min(start.y, p.y); it.w = Math.abs(p.x - start.x); it.h = Math.abs(p.y - start.y); draw(); };
-    const up = () => { window.removeEventListener('pointermove', move); if (it.w < 0.01 || it.h < 0.006) st.items = st.items.filter((i) => i !== it); else st.sel = it.id; draw(); };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up, { once: true });
+    const up = () => { if (it.w < 0.01 || it.h < 0.006) st.items = st.items.filter((i) => i !== it); else st.sel = it.id; draw(); };
+    follow(e, move, up);
     e.preventDefault();
-  });
+  }
   function remove(it) {
     if (!it) return;
     st.items = st.items.filter((i) => i !== it && i.id !== it.patch);
@@ -295,9 +359,14 @@ export function mountCanvasEditor(stage, session, { icon, renderPage }) {
     ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#0f172a';
     let drawing = false, dirty = false;
     const pt = (e) => { const r = pad.getBoundingClientRect(); return [(e.clientX - r.left) * pad.width / r.width, (e.clientY - r.top) * pad.height / r.height]; };
-    pad.addEventListener('pointerdown', (e) => { drawing = true; dirty = true; pad.setPointerCapture(e.pointerId); ctx.beginPath(); ctx.moveTo(...pt(e)); });
-    pad.addEventListener('pointermove', (e) => { if (drawing) { ctx.lineTo(...pt(e)); ctx.stroke(); } });
+    pad.addEventListener('pointerdown', (e) => { if (!e.isPrimary) return; drawing = true; dirty = true; pad.setPointerCapture(e.pointerId); ctx.beginPath(); ctx.moveTo(...pt(e)); e.preventDefault(); });
+    pad.addEventListener('pointermove', (e) => {
+      if (!drawing || !e.isPrimary) return;
+      for (const c of e.getCoalescedEvents?.() || [e]) ctx.lineTo(...pt(c));
+      ctx.stroke();
+    });
     pad.addEventListener('pointerup', () => { drawing = false; });
+    pad.addEventListener('pointercancel', () => { drawing = false; });
     d.querySelector('[data-clear]').onclick = () => { ctx.clearRect(0, 0, pad.width, pad.height); dirty = false; typed.value = ''; };
     d.querySelectorAll('[name=m]').forEach((r) => r.addEventListener('change', () => { const t = r.value === 'type'; pad.hidden = t; typed.hidden = !t; if (t) typed.focus(); }));
     d.addEventListener('close', async () => {
@@ -334,46 +403,88 @@ export function mountCanvasEditor(stage, session, { icon, renderPage }) {
     return out;
   }
 
-  /* ---- tool palette in the side panel ---- */
+  /* ---- tool palette in the side panel, mirrored in the page bar on small screens ---- */
+  const strip = stage.querySelector('.ed-tools');
+  strip.addEventListener('click', (e) => { const t = e.target.closest('[data-tool]'); if (t) pickTool(t.dataset.tool); });
+  function pickTool(id) {
+    st.active = id;
+    st.sel = null; // the panel follows the new tool, not the last item touched
+    if (id === 'image') imgInput.click();
+    if (id === 'signature' && !st.signature) openSignature();
+    mountTools(); draw();
+  }
+
   function mountTools() {
     const host = document.getElementById('editor-tools');
     if (!host) return;
-    const showStyle = palette.includes('text') || palette.includes('rect');
-    const tip = { edittext: 'Click any line of text on the page to change it.', ink: 'Drag on the page to draw.', highlight: 'Drag over the text you want to highlight.' }[st.active];
+    const selItem = st.items.find((i) => i.id === st.sel);
+    const focus = selItem && COLOURED.has(selItem.type) ? selItem.type : st.active;
+    const hasInk = palette.some((p) => ['text', 'rect', 'ink', 'date'].includes(p));
+    const showHighlight = palette.includes('highlight') && focus === 'highlight';
+    const showInk = hasInk && !showHighlight;
+    const showSize = palette.includes('text') || palette.includes('date');
+    const touch = matchMedia('(pointer: coarse)').matches;
+    const tip = {
+      edittext: `${touch ? 'Tap' : 'Click'} any line of text on the page to change it.`,
+      ink: touch ? 'Draw on the page with your finger or a stylus. Scroll from outside the page.' : 'Drag on the page to draw.',
+      highlight: touch ? 'Run your finger over the text you want to highlight.' : 'Drag over the text you want to highlight.',
+    }[st.active];
     host.innerHTML = `
       ${palette.length > 1 ? `<div class="field"><span>Tool</span><div class="tool-grid">${palette.map((p) => `<button type="button" class="tool-btn" data-tool="${p}" aria-pressed="${st.active === p}">${icon(LABELS[p][0], 18)}<span>${LABELS[p][1]}</span></button>`).join('')}</div></div>` : ''}
       ${palette.includes('signature') ? `<div class="field"><span>Signature</span>${st.signature ? `<img class="sig-preview" src="${st.signature.url}" alt="Your signature"/>` : ''}<button type="button" class="btn btn-ghost" data-sig>${st.signature ? 'Change signature' : 'Create signature'}</button></div>` : ''}
-      ${showStyle ? `<div class="row"><label class="field"><span>Colour</span><input type="color" data-st="color" value="${st.color}"/></label>
-        <label class="field grow"><span>Text size</span><input type="number" data-st="fontSize" min="6" max="96" value="${st.fontSize}"/></label></div>` : ''}
-      ${palette.includes('ink') ? `<label class="field"><span>Pen width</span><input type="range" data-st="inkWidth" min="1" max="14" step="1" value="${st.inkWidth}"/></label>` : ''}
-      ${palette.includes('rect') ? `<label class="check"><input type="checkbox" data-st="fill" ${st.fill ? 'checked' : ''}/> <span>Fill shapes</span></label>` : ''}
+      ${showHighlight ? swatches('highlight', 'Highlight colour', HIGHLIGHTS) : ''}
+      ${showInk ? swatches('color', palette.includes('ink') || palette.includes('rect') ? 'Colour for text, pen and shapes' : 'Text colour', INKS) : ''}
+      ${showSize ? `<label class="field"><span>Text size</span><input type="number" data-st="fontSize" min="6" max="96" value="${st.fontSize}"/></label>` : ''}
+      ${focus === 'ink' ? `<label class="field"><span>Pen width</span><input type="range" data-st="inkWidth" min="1" max="14" step="1" value="${st.inkWidth}"/></label>` : ''}
+      ${focus === 'rect' ? `<label class="check"><input type="checkbox" data-st="fill" ${st.fill ? 'checked' : ''}/> <span>Fill shapes</span></label>` : ''}
       ${tip ? `<p class="note">${tip}</p>` : ''}
-      <p class="note small">${countText()}Select an item and press Delete to remove it.</p>`;
+      <p class="note small">${countText()}${touch ? 'Tap an item, then its red button to remove it.' : 'Select an item and press Delete to remove it.'}</p>`;
     host.onclick = (e) => {
       const t = e.target.closest('[data-tool]');
-      if (t) {
-        st.active = t.dataset.tool;
-        if (st.active === 'image') imgInput.click();
-        if (st.active === 'signature' && !st.signature) openSignature();
-        mountTools(); draw();
-      }
+      if (t) pickTool(t.dataset.tool);
       if (e.target.closest('[data-sig]')) openSignature();
+      const sw = e.target.closest('[data-swatch]');
+      if (sw) { st[sw.dataset.swatch] = sw.dataset.val; restyle(sw.dataset.swatch); mountTools(); }
     };
+    strip.innerHTML = palette.length > 1 ? palette.map((p) => `<button type="button" class="ed-tool" data-tool="${p}" aria-pressed="${st.active === p}" aria-label="${LABELS[p][1]}" title="${LABELS[p][1]}">${icon(LABELS[p][0], 20)}</button>`).join('') : '';
     host.oninput = (e) => {
       const k = e.target.dataset.st;
       if (!k) return;
       e.stopPropagation();
       st[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'number' ? Number(e.target.value) || 16 : e.target.type === 'range' ? Number(e.target.value) : e.target.value;
-      const it = st.items.find((i) => i.id === st.sel);
-      if (it) {
-        if (k === 'color' && it.type !== 'highlight' && it.type !== 'whiteout') it.color = st.color;
-        if (k === 'inkWidth' && it.type === 'ink') it.width = st.inkWidth / pageEl.clientHeight;
-        if (k === 'fontSize' && it.type === 'text') it.fontSize = st.fontSize / 792;
-        if (k === 'fill' && it.type === 'rect') it.fill = st.fill;
-        draw();
+      restyle(k);
+      // live-update the swatch ring while the custom colour picker is open
+      if (k === 'color' || k === 'highlight') {
+        host.querySelectorAll(`[data-swatch="${k}"]`).forEach((b) => b.setAttribute('aria-checked', b.dataset.val === st[k]));
+        const c = e.target.closest('.swatch-custom');
+        if (c) { c.classList.add('on'); c.style.setProperty('--sw', st[k]); }
       }
     };
     host.onchange = (e) => e.stopPropagation();
+  }
+
+  /** Push a panel setting onto the selected item, when it applies to that kind of item. */
+  function restyle(k) {
+    const it = st.items.find((i) => i.id === st.sel);
+    if (!it) return;
+    if (k === 'color' && COLOURED.has(it.type) && it.type !== 'highlight') it.color = st.color;
+    if (k === 'highlight' && it.type === 'highlight') it.color = st.highlight;
+    if (k === 'inkWidth' && it.type === 'ink') it.width = st.inkWidth / pageEl.clientHeight;
+    if (k === 'fontSize' && it.type === 'text') it.fontSize = st.fontSize / 792;
+    if (k === 'fill' && it.type === 'rect') it.fill = st.fill;
+    draw();
+  }
+
+  function swatches(key, label, list) {
+    const cur = st[key].toLowerCase();
+    const custom = !list.some(([c]) => c === cur);
+    return `<div class="field"><span id="sw-${key}">${label}</span>
+      <div class="swatches" role="radiogroup" aria-labelledby="sw-${key}">
+        ${list.map(([c, name]) => `<button type="button" class="swatch" role="radio" data-swatch="${key}" data-val="${c}" aria-checked="${c === cur}" title="${name}" style="--sw:${c}"><span class="sr">${name}</span></button>`).join('')}
+        <label class="swatch swatch-custom${custom ? ' on' : ''}" title="Pick any colour" style="--sw:${custom ? cur : 'transparent'}">
+          <input type="color" data-st="${key}" value="${cur}" aria-label="Custom ${label.toLowerCase()}"/>
+        </label>
+      </div></div>`;
   }
 
   function countText() {
@@ -394,7 +505,12 @@ export function mountCanvasEditor(stage, session, { icon, renderPage }) {
   }
 
   let rz;
-  window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => layer.isConnected && show(), 150); });
+  // Only a change in width needs a new render. On phones the on-screen keyboard changes
+  // the height, and redrawing then would take focus away from the text being typed.
+  window.addEventListener('resize', () => {
+    clearTimeout(rz);
+    rz = setTimeout(() => layer.isConnected && stage.clientWidth !== shownWidth && show(), 150);
+  });
   show().then(mountTools);
   return { collect, page: () => st.page, mountTools };
 }

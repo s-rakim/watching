@@ -1,7 +1,8 @@
-import { ArrowRight, Check, Download, RotateCcw } from 'lucide-react';
+import { ArrowRight, Check, Download, RotateCcw, Share } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Result, saveBlob } from '../lib/api';
+import { canShareFile, coarsePointer, isIOS, isStandalone } from '../lib/device';
 import { bytes, extOf, plural } from '../lib/format';
 import { passFiles } from '../lib/store';
 import { FOLLOW_UPS, ToolDef, toolById } from '../tools';
@@ -28,9 +29,19 @@ export default function ResultView({ tool, result, onAgain }: Props) {
   const navigate = useNavigate();
   const isPdf = extOf(result.name) === 'pdf';
 
+  // Phones and tablets also get the share sheet: it is how you save to Files on iOS, or
+  // send the result straight to Drive, mail or a chat on Android.
+  const shareable = useMemo(
+    () => new File([result.blob], result.name, { type: result.blob.type || 'application/octet-stream' }),
+    [result],
+  );
+  const share = (coarsePointer() || isIOS) && canShareFile(shareable);
+
   useEffect(() => {
-    // Start the download straight away, like people expect.
-    saveBlob(result.blob, result.name);
+    // Start the download straight away, like people expect. Not inside an iOS home-screen
+    // app though: there is no download bar there, and the preview it opens is easy to get
+    // stuck in, so let people pick Download or Share themselves.
+    if (!(isIOS && isStandalone())) saveBlob(result.blob, result.name);
   }, [result]);
 
   const detail = useMemo(() => {
@@ -62,6 +73,15 @@ export default function ResultView({ tool, result, onAgain }: Props) {
           <Download size={20} strokeWidth={2.4} />
           Download {result.count > 1 ? 'zip' : extOf(result.name).toUpperCase()}
         </button>
+        {share && (
+          <button
+            className="btn btn-secondary"
+            onClick={() => navigator.share({ files: [shareable], title: result.name }).catch(() => undefined)}
+          >
+            <Share size={18} strokeWidth={2.2} />
+            {isIOS ? 'Save to Files or share' : 'Share'}
+          </button>
+        )}
         <button className="btn btn-secondary" onClick={onAgain}>
           <RotateCcw size={18} strokeWidth={2.2} />
           Start over

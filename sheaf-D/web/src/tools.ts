@@ -11,6 +11,9 @@ import {
   FileSpreadsheet,
   FileText,
   FileType,
+  Languages,
+  ListChecks,
+  Workflow,
   GitCompareArrows,
   Globe,
   Hash,
@@ -30,7 +33,7 @@ import {
   Wrench,
 } from 'lucide-react';
 
-export type Category = 'organize' | 'optimize' | 'convert-to' | 'convert-from' | 'edit' | 'security';
+export type Category = 'organize' | 'optimize' | 'convert-to' | 'convert-from' | 'edit' | 'security' | 'smart';
 
 export const CATEGORIES: { id: Category; name: string; short: string }[] = [
   { id: 'organize', name: 'Organize', short: 'Organize' },
@@ -39,6 +42,7 @@ export const CATEGORIES: { id: Category; name: string; short: string }[] = [
   { id: 'convert-from', name: 'Convert from PDF', short: 'From PDF' },
   { id: 'edit', name: 'Edit', short: 'Edit' },
   { id: 'security', name: 'Security', short: 'Security' },
+  { id: 'smart', name: 'Read & translate', short: 'Read' },
 ];
 
 export type Options = Record<string, any>;
@@ -59,10 +63,12 @@ export type Field =
   | (FieldBase & { type: 'color' })
   | (FieldBase & { type: 'anchor' })
   | (FieldBase & { type: 'languages' })
+  | (FieldBase & { type: 'translate-language'; allowAuto?: boolean })
+  | (FieldBase & { type: 'steps' })
   | (FieldBase & { type: 'file'; accept: string });
 
 export type Workspace = 'pages' | 'editor' | 'crop' | 'compare';
-export type Capability = 'qpdf' | 'ghostscript' | 'libreoffice' | 'ocr' | 'poppler' | 'python' | 'chromium';
+export type Capability = 'qpdf' | 'ghostscript' | 'libreoffice' | 'ocr' | 'poppler' | 'python' | 'chromium' | 'translate';
 
 export interface ToolDef {
   id: string;
@@ -89,6 +95,8 @@ export interface ToolDef {
   /** True when the work happens in the browser and never touches the server. */
   local?: boolean;
   check?: (o: Options, fileCount: number) => string | null;
+  /** Shown instead of the usual "the Docker image has everything" when a capability is missing. */
+  missingHint?: string;
 }
 
 const IMAGES = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'tif', 'tiff'];
@@ -811,7 +819,104 @@ export const TOOLS: ToolDef[] = [
     workspace: 'compare',
     local: true,
   },
+
+  // Read & translate
+  {
+    id: 'summarize',
+    name: 'Summarize PDF',
+    blurb: 'Pull out the key points of a long PDF in a few lines.',
+    category: 'smart',
+    icon: ListChecks,
+    accept: ['pdf'],
+    multiple: true,
+    noun: 'PDF',
+    action: 'Summarize',
+    working: 'Reading and summarising',
+    needs: ['python'],
+    defaults: { length: 'medium' },
+    fields: [
+      {
+        type: 'choice',
+        key: 'length',
+        label: 'Length',
+        options: [
+          { value: 'short', label: 'Short', hint: 'About 5 points' },
+          { value: 'medium', label: 'Medium', hint: 'About 10 points' },
+          { value: 'long', label: 'Long', hint: 'About 18 points' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'translate',
+    name: 'Translate PDF',
+    blurb: 'Translate a PDF with DeepL, or offline on this machine, and choose which.',
+    category: 'smart',
+    icon: Languages,
+    accept: ['pdf'],
+    multiple: true,
+    noun: 'PDF',
+    action: 'Translate',
+    working: 'Translating',
+    needs: ['python', 'translate'],
+    missingHint: 'Translate needs a DeepL API key (set DEEPL_AUTH_KEY) or the offline language packs (build with TRANSLATE_LANGS). The README shows both.',
+    defaults: { from: 'auto', to: 'en-us', format: 'pdf', engine: 'auto' },
+    fields: [
+      {
+        type: 'choice',
+        key: 'engine',
+        label: 'Translator',
+        options: [
+          { value: 'auto', label: 'Automatic', hint: 'DeepL when its key is set, otherwise offline' },
+          { value: 'deepl', label: 'DeepL', hint: 'Best quality, can keep the layout. Sends the file to DeepL' },
+          { value: 'argos', label: 'Offline', hint: 'Stays on this machine. Text only, no layout' },
+        ],
+      },
+      { type: 'translate-language', key: 'from', label: 'From', allowAuto: true },
+      { type: 'translate-language', key: 'to', label: 'To' },
+      {
+        type: 'choice',
+        key: 'format',
+        label: 'Save as',
+        options: [
+          { value: 'pdf', label: 'PDF', hint: 'Same layout. DeepL only, offline gives Word instead' },
+          { value: 'docx', label: 'Word', hint: 'Just the text, headings and lists' },
+          { value: 'md', label: 'Markdown', hint: 'Just the text, headings and lists' },
+        ],
+      },
+    ],
+    check: (o) => (o.from !== 'auto' && String(o.to).startsWith(o.from) ? 'Pick two different languages.' : null),
+  },
+  {
+    id: 'workflow',
+    name: 'Workflow',
+    blurb: 'Chain several tools and run them on your PDFs in one go.',
+    category: 'organize',
+    icon: Workflow,
+    accept: ['pdf'],
+    multiple: true,
+    noun: 'PDF',
+    action: 'Run workflow',
+    working: 'Running each step',
+    defaults: { steps: [{ tool: 'compress', options: { level: 'recommended' } }] },
+    fields: [{ type: 'steps', key: 'steps', label: 'Steps', hint: 'Each step works on what the step before it made.' }],
+    check: (o) => {
+      const steps: { tool: string; options: Options }[] = o.steps ?? [];
+      if (!steps.length) return 'Add at least one step.';
+      if (steps.some((s, i) => s.tool === 'merge' && i > 0)) return 'Merge has to be the first step.';
+      if (steps.some((s, i) => s.tool === 'protect' && i < steps.length - 1)) return 'Protect has to be the last step.';
+      for (const [i, s] of steps.entries()) {
+        const t = toolById(s.tool);
+        const msg = t?.check?.(s.options, 2);
+        if (msg) return `Step ${i + 1}: ${msg}`;
+      }
+      return null;
+    },
+  },
 ];
+
+/** Tools a workflow can chain, in the order they are offered. */
+export const CHAINABLE = ['merge', 'rotate', 'compress', 'repair', 'ocr', 'page-numbers', 'watermark', 'pdf-to-pdfa', 'unlock', 'protect'];
 
 export const toolById = (id: string | undefined) => TOOLS.find((t) => t.id === id);
 

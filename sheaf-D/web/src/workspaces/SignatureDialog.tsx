@@ -217,9 +217,9 @@ export default function SignatureDialog({ onDone, onClose }: Props) {
         )}
 
         {tab === 'upload' && (
-          <label className="sig-upload">
+          <label className="sig-upload has-pick">
             {upload ? <img src={upload.src} alt="Your uploaded signature" /> : <span>Choose a photo or scan of your signature</span>}
-            <input type="file" accept="image/*" className="sr-only" onChange={(e) => onUpload(e.target.files?.[0])} />
+            <input type="file" accept="image/*" className="pick" onChange={(e) => onUpload(e.target.files?.[0])} />
           </label>
         )}
 

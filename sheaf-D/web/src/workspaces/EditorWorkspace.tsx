@@ -22,6 +22,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as pdfjs from 'pdfjs-dist';
+import { fitArea, PLAIN_EDIT } from '../lib/device';
 import { plural, uid } from '../lib/format';
 import { openPdf, PDFDocumentProxy } from '../lib/pdf';
 import { applyEdits, FONT_CSS, FontFamily, LINE_HEIGHT, Obj, redactPdf } from '../lib/pdfEdit';
@@ -69,7 +70,14 @@ const TOOLSETS: Record<string, { id: ToolId; label: string; key: string; icon: L
 };
 
 const COLOURS = ['#1f1a14', '#c9252b', '#0a62a0', '#17733a', '#ff6b3d', '#ffffff'];
-const HIGHLIGHTS = ['#ffe14d', '#8fd14f', '#ff9ec3', '#7fd3ff'];
+const HIGHLIGHTS: [string, string][] = [
+  ['#ffe14d', 'Yellow'],
+  ['#8fd14f', 'Green'],
+  ['#7fd3ff', 'Blue'],
+  ['#ff9ec3', 'Pink'],
+  ['#ffb763', 'Orange'],
+  ['#c9a7ff', 'Purple'],
+];
 const MIN_BOX = 4;
 
 interface Drag {
@@ -82,6 +90,8 @@ interface Drag {
   corner?: string;
   points?: [number, number][];
   moved: boolean;
+  /** The object was already selected when the press began, so a plain tap opens it for typing. */
+  wasSelected?: boolean;
 }
 
 interface PageProps {
@@ -125,7 +135,9 @@ const PageView = memo(function PageView(props: PageProps) {
       const page = await doc.getPage(index + 1);
       if (!alive || !canvas.current) return;
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const viewport = page.getViewport({ scale: zoom * dpr });
+      // Zoomed-in pages on a 2x screen can pass the size iOS allows for one canvas.
+      const want = page.getViewport({ scale: zoom * dpr });
+      const viewport = page.getViewport({ scale: zoom * dpr * fitArea(want.width, want.height) });
       const off = document.createElement('canvas');
       off.width = Math.round(viewport.width);
       off.height = Math.round(viewport.height);
@@ -139,6 +151,8 @@ const PageView = memo(function PageView(props: PageProps) {
       canvas.current.width = off.width;
       canvas.current.height = off.height;
       canvas.current.getContext('2d')!.drawImage(off, 0, 0);
+      // Hand the memory back straight away; iOS is slow to collect canvases by itself.
+      off.width = off.height = 0;
     }, 60);
     return () => {
       alive = false;
@@ -224,7 +238,7 @@ function ObjectView({ o, zoom, selected, editing, onEdit, onText, onBlurText }: 
         <div
           ref={textRef}
           className="ed-text-body"
-          contentEditable={editing ? ('plaintext-only' as any) : false}
+          contentEditable={editing ? (PLAIN_EDIT as any) : false}
           suppressContentEditableWarning
           spellCheck={false}
           data-placeholder="Type here"
@@ -333,7 +347,7 @@ export default function EditorWorkspace({ tool, items, submit, reset, error }: W
     font: 'sans',
     bold: false,
     fill: false,
-    highlight: HIGHLIGHTS[0],
+    highlight: HIGHLIGHTS[0][0],
   });
   const [stamp, setStamp] = useState<Stamp | null>(null);
   const [signatures, setSignatures] = useState<Stamp[]>([]);
@@ -445,9 +459,35 @@ export default function EditorWorkspace({ tool, items, submit, reset, error }: W
     return { x: (e.clientX - rect.left) / zoom, y: (e.clientY - rect.top) / zoom };
   };
 
+  // On touch screens, text and stamps are placed when the finger lifts, so a swipe that
+  // turns into a scroll (and ends in pointercancel) doesn't drop anything on the page.
+  const pendingTap = useRef<{ page: number; p: { x: number; y: number } } | null>(null);
+  const placeAt = useRef<(p: { x: number; y: number }, page: number) => void>(() => {});
+  placeAt.current = (p, page) => {
+    const id = uid();
+    if (active === 'text') {
+      commit((prev) => [
+        ...prev,
+        { id, page, type: 'text', x: p.x, y: p.y - style.size * 0.6, w: 0, h: 0, text: '', size: style.size, color: style.color, font: style.font, bold: style.bold },
+      ]);
+      setSelected(id);
+      setEditing(id);
+      setActive('select');
+    } else if (active === 'stamp' && stamp) {
+      const w = Math.min(180, sizes[page].w * 0.4);
+      const h = w / stamp.ratio;
+      commit((prev) => [...prev, { id, page, type: 'image', src: stamp.src, x: p.x - w / 2, y: p.y - h / 2, w, h }]);
+      setSelected(id);
+      setStamp(null);
+      setActive('select');
+    }
+  };
+
   const onDown = useCallback(
     (e: React.PointerEvent, page: number) => {
-      if (e.button !== 0) return;
+      // Ignore a second finger, and a palm resting beside a stylus.
+      if (e.button !== 0 || !e.isPrimary) return;
+      pendingTap.current = null;
       const target = e.target as HTMLElement;
       const p = pointOf(e);
       const hitEl = target.closest<HTMLElement>('[data-obj]');
@@ -461,7 +501,7 @@ export default function EditorWorkspace({ tool, items, submit, reset, error }: W
         if (editing && editing !== id) setEditing(null);
         if (editing === id) return;
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-        drag.current = { kind: handle ? 'resize' : 'move', id, page, startX: p.x, startY: p.y, orig, corner: handle, moved: false };
+        drag.current = { kind: handle ? 'resize' : 'move', id, page, startX: p.x, startY: p.y, orig, corner: handle, moved: false, wasSelected: selected === id };
         return;
       }
 
@@ -471,27 +511,17 @@ export default function EditorWorkspace({ tool, items, submit, reset, error }: W
         return;
       }
 
-      const id = uid();
-      if (active === 'text') {
+      if (active === 'text' || (active === 'stamp' && stamp)) {
+        if (e.pointerType === 'touch') {
+          pendingTap.current = { page, p };
+          return;
+        }
         e.preventDefault();
-        commit((prev) => [
-          ...prev,
-          { id, page, type: 'text', x: p.x, y: p.y - style.size * 0.6, w: 0, h: 0, text: '', size: style.size, color: style.color, font: style.font, bold: style.bold },
-        ]);
-        setSelected(id);
-        setEditing(id);
-        setActive('select');
+        placeAt.current(p, page);
         return;
       }
-      if (active === 'stamp' && stamp) {
-        const w = Math.min(180, sizes[page].w * 0.4);
-        const h = w / stamp.ratio;
-        commit((prev) => [...prev, { id, page, type: 'image', src: stamp.src, x: p.x - w / 2, y: p.y - h / 2, w, h }]);
-        setSelected(id);
-        setStamp(null);
-        setActive('select');
-        return;
-      }
+
+      const id = uid();
 
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
       past.current.push(current);
@@ -516,7 +546,7 @@ export default function EditorWorkspace({ tool, items, submit, reset, error }: W
       setObjects((prev) => [...prev, fresh]);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [active, zoom, style, stamp, editing, sizes, commit],
+    [active, zoom, style, stamp, editing, selected, sizes, commit],
   );
 
   const onMove = useCallback(
@@ -576,7 +606,12 @@ export default function EditorWorkspace({ tool, items, submit, reset, error }: W
         return;
       }
       if (d.kind === 'draw' && d.points) {
-        d.points.push([p.x, p.y]);
+        // Pens and quick fingers report more points than there are frames. Keep them all.
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const samples = e.nativeEvent.getCoalescedEvents?.() ?? [];
+        if (samples.length > 1) {
+          for (const c of samples) d.points.push([(c.clientX - rect.left) / zoom, (c.clientY - rect.top) / zoom]);
+        } else d.points.push([p.x, p.y]);
         const xs = d.points.map((q) => q[0]);
         const ys = d.points.map((q) => q[1]);
         const x = Math.min(...xs);
@@ -591,10 +626,22 @@ export default function EditorWorkspace({ tool, items, submit, reset, error }: W
   );
 
   const onUp = useCallback(
-    (_e: React.PointerEvent, page: number) => {
+    (e: React.PointerEvent, page: number) => {
+      const tap = pendingTap.current;
+      if (tap) {
+        pendingTap.current = null;
+        if (e.type === 'pointerup' && tap.page === page) placeAt.current(tap.p, page);
+        return;
+      }
       const d = drag.current;
       if (!d || d.page !== page) return;
       drag.current = null;
+      // A tap on text that was already selected opens it for typing. Double-click still
+      // works with a mouse, but a double tap is unreliable on phones.
+      if (d.kind === 'move' && !d.moved && d.wasSelected && e.type === 'pointerup') {
+        if (live.current.find((o) => o.id === d.id)?.type === 'text') setEditing(d.id);
+        return;
+      }
       if (d.kind === 'create' || d.kind === 'draw') {
         const made = live.current.find((o) => o.id === d.id);
         const tooSmall =
@@ -913,9 +960,15 @@ export default function EditorWorkspace({ tool, items, submit, reset, error }: W
         <div className="field">
           <span className="field-label">Highlighter</span>
           <div className="color-row">
-            {HIGHLIGHTS.map((c) => {
+            <input
+              type="color"
+              value={sel?.type === 'highlight' ? sel.color : style.highlight}
+              onChange={(e) => restyle({ highlight: e.target.value })}
+              aria-label="Custom highlighter colour"
+            />
+            {HIGHLIGHTS.map(([c, name]) => {
               const on = (sel?.type === 'highlight' ? sel.color : style.highlight) === c;
-              return <button key={c} className={`swatch${on ? ' is-on' : ''}`} style={{ background: c }} aria-label={`Highlighter ${c}`} onClick={() => restyle({ highlight: c })} />;
+              return <button key={c} className={`swatch${on ? ' is-on' : ''}`} style={{ background: c }} aria-label={`${name} highlighter`} title={name} onClick={() => restyle({ highlight: c })} />;
             })}
           </div>
         </div>

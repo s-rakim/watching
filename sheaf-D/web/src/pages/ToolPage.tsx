@@ -3,7 +3,8 @@ import {
   DndContext,
   DragEndEvent,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
@@ -182,7 +183,10 @@ function ToolRunner({ tool }: { tool: ToolDef }) {
   };
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    // Mouse and pen drags start after a few pixels. Touch drags need a short press and hold,
+    // otherwise a finger could never scroll past the pages.
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
   const onDragEnd = (e: DragEndEvent) => {
@@ -225,11 +229,12 @@ function ToolRunner({ tool }: { tool: ToolDef }) {
       tabIndex={-1}
       accept={acceptAttr(tool)}
       multiple={tool.multiple}
-      onChange={(e) => {
-        const { ok, bad } = sortFiles(tool, Array.from(e.target.files ?? []));
+      onChange={async (e) => {
+        const list = Array.from(e.target.files ?? []);
+        e.target.value = '';
+        const { ok, bad } = await sortFiles(tool, list);
         if (bad.length) toast(`${bad[0].name} isn’t a ${tool.noun}, so it was skipped.`, 'error');
         if (ok.length) addFiles(ok);
-        e.target.value = '';
       }}
     />
   );
@@ -302,8 +307,14 @@ function ToolRunner({ tool }: { tool: ToolDef }) {
               <div className="note note-warning" role="alert">
                 <TriangleAlert size={20} strokeWidth={2} />
                 <span>
-                  This tool needs {missing.join(' and ')} on the machine running Sheaf-D, and it isn&rsquo;t there. The
-                  Docker image has everything; see the README if you run it another way.
+                  {tool.missingHint && missing.every((m) => m === 'translate') ? (
+                    tool.missingHint
+                  ) : (
+                    <>
+                      This tool needs {missing.join(' and ')} on the machine running Sheaf-D, and it isn&rsquo;t there. The
+                      Docker image has everything; see the README if you run it another way.
+                    </>
+                  )}
                 </span>
               </div>
             )}

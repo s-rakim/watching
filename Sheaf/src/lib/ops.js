@@ -5,8 +5,9 @@ import {
 import {
   loadPdf, openForRender, closePdf, renderPage, canvasToBlob, blobBytes, baseName,
 } from './pdf.js';
+import { makeCanvas, encodeCanvas, fitArea, releaseCanvas } from './device.js';
 
-const out = (name, bytes, type = 'application/pdf') => ({ name, blob: new Blob([bytes], { type }) });
+export const out = (name, bytes, type = 'application/pdf') => ({ name, blob: new Blob([bytes], { type }) });
 
 function hexToRgb(hex) {
   const n = parseInt(hex.replace('#', ''), 16);
@@ -108,11 +109,12 @@ async function recompressJpeg(bytes, { maxDim, quality }) {
   const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
   const w = Math.max(1, Math.round(bmp.width * scale));
   const h = Math.max(1, Math.round(bmp.height * scale));
-  const canvas = new OffscreenCanvas(w, h);
+  const canvas = makeCanvas(w, h);
   const ctx = canvas.getContext('2d');
   ctx.drawImage(bmp, 0, 0, w, h);
   bmp.close?.();
-  const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality });
+  const blob = await encodeCanvas(canvas, 'image/jpeg', quality);
+  releaseCanvas(canvas);
   return { bytes: await blobBytes(blob), w, h };
 }
 
@@ -239,12 +241,31 @@ async function normalizeImage(file, scan) {
     return { bytes: new Uint8Array(await file.arrayBuffer()), type };
   }
   const bmp = await createImageBitmap(file);
-  const canvas = new OffscreenCanvas(bmp.width, bmp.height);
+  // 48 MP phone photos are bigger than a canvas may be on iOS, so scale those down.
+  const k = fitArea(bmp.width, bmp.height);
+  const w = Math.round(bmp.width * k), h = Math.round(bmp.height * k);
+  const canvas = makeCanvas(w, h);
   const ctx = canvas.getContext('2d');
-  if (scan) ctx.filter = 'grayscale(1) contrast(1.6) brightness(1.08)';
-  ctx.drawImage(bmp, 0, 0);
-  const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.88 });
+  // Safari before 18 has no canvas filters, so there the scan look is done by hand.
+  const native = 'filter' in Object.getPrototypeOf(ctx);
+  if (scan && native) ctx.filter = 'grayscale(1) contrast(1.6) brightness(1.08)';
+  ctx.drawImage(bmp, 0, 0, w, h);
+  bmp.close?.();
+  if (scan && !native) scanFilter(ctx, w, h);
+  const blob = await encodeCanvas(canvas, 'image/jpeg', 0.88);
+  releaseCanvas(canvas);
   return { bytes: await blobBytes(blob), type: 'image/jpeg' };
+}
+
+/** Same look as the CSS filter used for scans: grey, more contrast, slightly brighter. */
+function scanFilter(ctx, w, h) {
+  const img = ctx.getImageData(0, 0, w, h), d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const g = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+    const v = Math.max(0, Math.min(255, ((g - 128) * 1.6 + 128) * 1.08));
+    d[i] = d[i + 1] = d[i + 2] = v;
+  }
+  ctx.putImageData(img, 0, 0);
 }
 
 export async function imagesToPdf(files, o) {
@@ -285,7 +306,7 @@ export async function pdfToImages(file, o, onProgress) {
   for (let i = 1; i <= pdf.numPages; i++) {
     const canvas = await renderPage(pdf, i, { scale });
     results.push({ name: `${baseName(file.name)}-page-${String(i).padStart(3, '0')}.${ext}`, blob: await canvasToBlob(canvas, type, Number(o.quality || 0.9)) });
-    canvas.width = canvas.height = 0;
+    releaseCanvas(canvas);
     onProgress?.(i / pdf.numPages);
   }
   await closePdf(pdf);
@@ -328,40 +349,58 @@ export async function extractLines(pdf) {
   return pages;
 }
 
-export function linesToMarkdown(pages) {
+/**
+ * Reading-order blocks from extracted lines: headings (by font size against the body size),
+ * list items, paragraphs, and a marker at each page end. Markdown, Word and Translate share it.
+ */
+export function linesToBlocks(pages) {
   const sizes = pages.flat().map((l) => Math.round(l.size * 2) / 2);
   const freq = new Map();
   for (const s of sizes) freq.set(s, (freq.get(s) || 0) + 1);
   const body = [...freq.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 10;
-  const md = [];
+  const blocks = [];
   for (const lines of pages) {
     let para = [];
-    const flush = () => { if (para.length) { md.push(para.join(' ').replace(/(\w)- (\w)/g, '$1$2')); md.push(''); para = []; } };
+    const flush = () => { if (para.length) { blocks.push({ t: 'p', text: para.join(' ').replace(/(\w)- (\w)/g, '$1$2') }); para = []; } };
     lines.forEach((l, i) => {
       const prev = lines[i - 1];
       const gap = prev ? prev.y - l.y : 0;
       const ratio = l.size / body;
       if (ratio > 1.15 && l.text.length < 120) {
         flush();
-        md.push(`${ratio > 1.8 ? '#' : ratio > 1.4 ? '##' : '###'} ${l.text}`, '');
+        blocks.push({ t: 'h', level: ratio > 1.8 ? 1 : ratio > 1.4 ? 2 : 3, text: l.text });
         return;
       }
       const bullet = l.text.match(/^([•●▪◦‣\-*–]|\d+[.)])\s+(.*)$/);
       if (bullet) {
         flush();
-        md.push(/^\d/.test(bullet[1]) ? `${bullet[1].replace(')', '.')} ${bullet[2]}` : `- ${bullet[2]}`);
+        blocks.push({ t: 'li', marker: /^\d/.test(bullet[1]) ? bullet[1].replace(')', '.') : null, text: bullet[2] });
         return;
       }
       if (prev && gap > l.size * 1.8) flush();
-      if (!para.length && md.length && /^(- |\d+\. )/.test(md[md.length - 1])) md.push('');
       para.push(l.text);
     });
     flush();
-    md.push('---', '');
+    blocks.push({ t: 'page' });
+  }
+  return blocks;
+}
+
+export function blocksToMarkdown(blocks) {
+  const md = [];
+  for (const b of blocks) {
+    if (b.t === 'h') md.push(`${'#'.repeat(b.level)} ${b.text}`, '');
+    else if (b.t === 'li') md.push(b.marker ? `${b.marker} ${b.text}` : `- ${b.text}`);
+    else if (b.t === 'p') {
+      if (md.length && /^(- |\d+\. )/.test(md[md.length - 1])) md.push('');
+      md.push(b.text, '');
+    } else md.push('---', '');
   }
   while (md.length && (md[md.length - 1] === '' || md[md.length - 1] === '---')) md.pop();
   return md.join('\n').replace(/\n{3,}/g, '\n\n') + '\n';
 }
+
+export const linesToMarkdown = (pages) => blocksToMarkdown(linesToBlocks(pages));
 
 export async function pdfToMarkdown(file, o) {
   const pdf = await openForRender(file.bytes, file.password);
@@ -432,8 +471,10 @@ export async function repair(file) {
     try {
       const canvas = await renderPage(pdf, i, { scale: 2 });
       const img = await doc.embedJpg(await blobBytes(await canvasToBlob(canvas, 'image/jpeg', 0.9)));
-      const page = doc.addPage([canvas.width / 2, canvas.height / 2]);
-      page.drawImage(img, { x: 0, y: 0, width: canvas.width / 2, height: canvas.height / 2 });
+      const w = canvas.width / canvas.pdfScale, h = canvas.height / canvas.pdfScale;
+      const page = doc.addPage([w, h]);
+      page.drawImage(img, { x: 0, y: 0, width: w, height: h });
+      releaseCanvas(canvas);
     } catch { /* skip unreadable page */ }
   }
   if (!doc.getPageCount()) throw new Error("This file is too damaged to recover any pages.");
@@ -445,7 +486,7 @@ export async function repair(file) {
  * displayed (rotation included), which is how the editor works. They are mapped back to PDF
  * user space here.
  */
-function toPdfRect(page, it) {
+export function toPdfRect(page, it) {
   // pdf.js displays the crop box, so work relative to it.
   const cb = page.getCropBox();
   const { width, height } = cb;
@@ -524,7 +565,7 @@ export async function applyOverlays(file, items, outName) {
 
 // For drawImage/drawText with rotation, the origin is the bottom-left corner of the
 // content in its own (rotated) frame. Map from our un-rotated user-space rect.
-function rotatedOrigin(r) {
+export function rotatedOrigin(r) {
   switch (r.rot) {
     case 90: return { x: r.x + r.w, y: r.y };
     case 180: return { x: r.x + r.w, y: r.y + r.h };
@@ -556,10 +597,10 @@ export async function redact(file, items, onProgress) {
         ctx.fillRect(it.x * canvas.width, it.y * canvas.height, it.w * canvas.width, it.h * canvas.height);
       }
       const img = await doc.embedJpg(await blobBytes(await canvasToBlob(canvas, 'image/jpeg', 0.92)));
-      const w = canvas.width / 2.5, h = canvas.height / 2.5;
+      const w = canvas.width / canvas.pdfScale, h = canvas.height / canvas.pdfScale;
       const page = doc.addPage([w, h]);
       page.drawImage(img, { x: 0, y: 0, width: w, height: h });
-      canvas.width = canvas.height = 0;
+      releaseCanvas(canvas);
     }
     onProgress?.((i + 1) / n);
   }

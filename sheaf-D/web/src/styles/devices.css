@@ -1,0 +1,73 @@
+/*
+ * Phones, tablets and notched screens. Kept apart from app.css so the layout rules there
+ * stay readable; everything here is either a safe-area inset or a touch-specific tweak.
+ */
+
+/* No double-tap zoom on controls, so quick taps register as taps. */
+button,
+a,
+label,
+input,
+select,
+summary {
+  touch-action: manipulation;
+}
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+#root {
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* With viewport-fit=cover the page runs under the notch, the camera and the home bar.
+   Pad the header and the window so nothing important sits there. */
+.header {
+  height: calc(var(--header-height) + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: calc(var(--g) * 4 + env(safe-area-inset-left, 0px));
+  padding-right: calc(var(--g) * 4 + env(safe-area-inset-right, 0px));
+}
+.window {
+  height: calc(
+    100% - var(--header-height) - var(--body-container-margin) - env(safe-area-inset-top, 0px) -
+      env(safe-area-inset-bottom, 0px)
+  );
+  margin-left: calc(var(--body-container-margin) + env(safe-area-inset-left, 0px));
+  margin-right: calc(var(--body-container-margin) + env(safe-area-inset-right, 0px));
+  margin-bottom: calc(var(--body-container-margin) + env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 1023px) {
+  .canvas {
+    height: 68dvh;
+  }
+}
+
+/* Phones turned sideways: give the page nearly the whole screen once scrolled to. */
+@media (max-height: 500px) and (orientation: landscape) {
+  :root {
+    --header-height: 40px;
+  }
+  .crumbs {
+    min-height: 44px;
+  }
+  /* What is left once the breadcrumb and action bar (both pinned) are taken off. */
+  .canvas {
+    height: calc(100dvh - var(--header-height) - var(--body-container-margin) - 44px - 52px - env(safe-area-inset-bottom, 0px));
+    min-height: 200px;
+  }
+  .action-bar {
+    min-height: 52px;
+    padding-top: var(--g);
+    padding-bottom: var(--g);
+  }
+}
+
+@media (hover: none) {
+  .tool-card:hover,
+  .chip:hover {
+    transform: none;
+  }
+}
+

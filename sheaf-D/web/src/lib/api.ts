@@ -8,6 +8,10 @@ export interface Health {
   python: boolean;
   chromium: boolean;
   languages: string[];
+  translate?: boolean;
+  deepl?: boolean;
+  argos?: boolean;
+  argosPairs?: string[][];
   maxUploadMb: number;
 }
 

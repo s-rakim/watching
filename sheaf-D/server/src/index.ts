@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import archiver from 'archiver';
 import express, { NextFunction, Request, Response } from 'express';
 import multer from 'multer';
-import { Job, Output, Tool, UserError, run, safeName } from './lib.js';
+import { Job, Output, PY_DIR, Tool, UserError, run, safeName } from './lib.js';
 import { extractPages, merge, organize, removePages, rotate, split } from './tools/pages.js';
 import { compress, ocr, pdfa, repair } from './tools/optimize.js';
 import { protect, unlock } from './tools/security.js';
@@ -21,6 +21,8 @@ import {
   powerpointToPdf,
   wordToPdf,
 } from './tools/convert.js';
+import { summarize, translate } from './tools/text.js';
+import { workflow } from './tools/workflow.js';
 
 const TOOLS: Record<string, Tool> = {
   merge,
@@ -47,7 +49,10 @@ const TOOLS: Record<string, Tool> = {
   'pdf-to-word': pdfToWord,
   'pdf-to-powerpoint': pdfToPowerpoint,
   'pdf-to-excel': pdfToExcel,
+  summarize,
+  translate,
 };
+TOOLS.workflow = workflow(TOOLS);
 
 const PORT = parseInt(process.env.PORT ?? '8080', 10);
 const HOST = process.env.HOST ?? '0.0.0.0';
@@ -98,7 +103,7 @@ async function probe(cmd: string, args: string[]): Promise<string | null> {
 let capabilities: Promise<Record<string, unknown>> | null = null;
 function detect() {
   capabilities ??= (async () => {
-    const [qpdfV, gsV, office, ocrV, langs, poppler, py] = await Promise.all([
+    const [qpdfV, gsV, office, ocrV, langs, poppler, py, deepl, pairs] = await Promise.all([
       probe('qpdf', ['--version']),
       probe('gs', ['--version']),
       probe(process.env.SOFFICE_BIN || 'soffice', ['--version']),
@@ -106,7 +111,16 @@ function detect() {
       probe('tesseract', ['--list-langs']),
       probe('pdftoppm', ['-v']),
       probe(process.env.PYTHON_BIN || 'python3', ['-c', 'import pdf2docx, pdfplumber, openpyxl, PIL; print("ok")']),
+      probe(process.env.PYTHON_BIN || 'python3', ['-c', 'import deepl; print("ok")']),
+      probe(process.env.PYTHON_BIN || 'python3', [path.join(PY_DIR, 'text_tools.py'), 'langs']),
     ]);
+    let argosPairs: string[][] = [];
+    try {
+      argosPairs = JSON.parse(pairs ?? '[]');
+    } catch {
+      /* not installed */
+    }
+    const hasDeepl = deepl === 'ok' && !!process.env.DEEPL_AUTH_KEY?.trim();
     return {
       qpdf: !!qpdfV,
       ghostscript: !!gsV,
@@ -115,6 +129,12 @@ function detect() {
       poppler: !!poppler,
       python: py === 'ok',
       chromium: !!browserPath(),
+      // Translate has two engines: DeepL (needs the library and a key, which never leaves the
+      // server) and Argos (offline, needs language packs). Either one switches the tool on.
+      deepl: hasDeepl,
+      argos: argosPairs.length > 0,
+      argosPairs,
+      translate: hasDeepl || argosPairs.length > 0,
       languages: (langs ?? '')
         .split('\n')
         .map((l) => l.trim())
