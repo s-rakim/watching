@@ -1,5 +1,10 @@
-# Build the web app
-FROM node:22-bookworm-slim AS web
+# syntax=docker/dockerfile:1
+# Builds for linux/amd64 and linux/arm64 (Apple Silicon, Raspberry Pi 4/5 on a 64-bit
+# OS, Ampere and Graviton servers). See "Other CPUs" in the README.
+
+# Build the web app. Its output is plain HTML, CSS and JS, the same on every CPU, so this
+# stage always runs on the build machine's own architecture, even when cross-building.
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS web
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY web/package.json web/
@@ -9,7 +14,8 @@ COPY design design
 COPY web web
 RUN npm run build --workspace web
 
-# Runtime: the server plus every tool it shells out to
+# Runtime: the server plus every tool it shells out to. Every package below exists for
+# both amd64 and arm64 in Debian, and pip finds arm64 wheels for the Python libraries.
 FROM node:22-bookworm-slim
 
 # Extra Tesseract language packs, space separated. English is always there.

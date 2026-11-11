@@ -51,6 +51,45 @@ A few things worth knowing:
 - **Translate runs offline with Argos Translate**, but it is off unless you switch it on at build time (next section), because each language adds a few hundred MB to the image. Layout isn't kept: you get the translated text as a Word or Markdown file.
 - **Uploads are deleted as soon as the result has been sent back.** In the Docker setup they only ever exist in memory.
 
+## Phones, tablets and computers
+
+The server runs on Linux, macOS (Docker Desktop, Intel or Apple Silicon) and Windows (Docker Desktop with WSL 2). The web app it serves works in:
+
+| Browser | Oldest version that works |
+| --- | --- |
+| Safari on iPhone and iPad | iOS / iPadOS 16.4 |
+| Safari on macOS | 16.4 |
+| Chrome, Edge, Brave, Opera | 111 |
+| Firefox (including ESR on Linux) | 115 |
+| Samsung Internet | 22 |
+
+On a phone or tablet:
+
+- The layout drops to one scrolling column under 1024px, with the action button pinned at the bottom and the side menu behind the button in the breadcrumb bar.
+- In Organize, Remove, Extract and the file list, press and hold a page or file briefly, then drag to move it. A plain swipe scrolls.
+- In the editor, one finger scrolls the document while the arrow or Text tool is picked. Pick Draw, Highlight, a shape, White out or Redact to mark the page; scroll with the bar or from outside the page.
+- Tap with the Text tool to add text. Tap a text box once to select it and again to type in it (a double-click still works with a mouse).
+- Resize handles grow to finger size on touch screens.
+- After a job, phones and tablets get a **Share** button next to Download (**Save to Files or share** on iOS).
+
+To put Sheaf-D on a home screen: on iPhone and iPad, Safari's Share > **Add to Home Screen**; on Android, **Add to Home screen** or **Install app** in the browser menu; on a computer, the install icon in Chrome or Edge's address bar. Chrome only offers install on a secure address (`https://`, or `localhost` on the same machine), so on a tailnet use `tailscale serve` (see the main README). Sheaf-D needs its server for most tools, so unlike Sheaf it does not work offline.
+
+### Other CPUs
+
+The image builds for both `linux/amd64` (most PCs and servers) and `linux/arm64` (Apple Silicon Macs, Raspberry Pi 4 and 5 on a 64-bit OS, Ampere and AWS Graviton). `docker compose up -d --build` builds for whatever machine it runs on, so on an M-series Mac or a Pi you get a native arm64 image with no extra steps. 32-bit ARM (older Pi OS images) is not supported: several of the PDF libraries have no 32-bit ARM builds.
+
+To build both at once and push them to a registry as one image:
+
+```sh
+docker buildx create --use --name sheaf-builder   # once
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t ghcr.io/<you>/sheaf-d:latest --push .
+```
+
+The repository also has a GitHub Actions workflow, **Sheaf-D image** (`.github/workflows/sheaf-d-image.yml`), that does the same and publishes `ghcr.io/s-rakim/sheaf-d`. It only runs when started from the Actions tab or when a tag like `sheaf-d-v1.0.0` is pushed. To use the published image instead of building, replace `build: .` in `docker-compose.yml` with `image: ghcr.io/s-rakim/sheaf-d:latest` and run `docker compose up -d`.
+
+The arm64 half is built under emulation on GitHub's runners, so the first run takes a while (LibreOffice and Chromium are large). Later runs reuse the cache.
+
 ## Settings
 
 Set these under `environment:` in `docker-compose.yml`.

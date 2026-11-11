@@ -1,4 +1,4 @@
-import { closestCenter, DndContext, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { closestCenter, DndContext, DragEndEvent, KeyboardSensor, MouseSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Check, Copy, FilePlus2, Plus, RotateCcw, RotateCw, Trash2 } from 'lucide-react';
@@ -143,7 +143,10 @@ export default function PagesWorkspace({ tool, items, pickMore, submit, reset, e
 
   const fileOf = useMemo(() => new Map(items.map((i) => [i.id, i.file])), [items]);
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    // Mouse and pen drags start after a few pixels. Touch drags need a short press and hold,
+    // otherwise a finger could never scroll past the pages.
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
