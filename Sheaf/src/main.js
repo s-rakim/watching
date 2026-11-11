@@ -4,6 +4,7 @@ import { TOOLS, CATEGORIES, byId } from './tools.js';
 import { icon } from './lib/icons.js';
 import { readBytes, openForRender, renderPage, formatBytes, parseRanges, baseName, loadPdf } from './lib/pdf.js';
 import * as ops from './lib/ops.js';
+import * as conv from './lib/convert.js';
 import { mountCanvasEditor } from './editor.js';
 
 const app = document.getElementById('app');
@@ -194,6 +195,12 @@ function renderFields() {
     sign: 'Create your signature, then click where it should go.',
     crop: 'Drag the corners of the frame to choose what to keep.',
     compare: 'Removed words are marked on the left, added words on the right.',
+    ocr: 'Pages are read at 300 dpi on this device. A big scan can take a minute or two.',
+    'pdf-to-word': 'Text, headings and lists come across as editable Word text. Images and exact positions are not kept.',
+    'pdf-to-excel': 'Works best on PDFs made from spreadsheets or reports. Numbers become real numbers you can add up.',
+    'pdf-to-powerpoint': 'Each page becomes one slide, shown as a picture of the page.',
+    summarize: 'Summarizer' in self ? 'Your browser has an on-device model, so the summary is written fresh.' : 'Key sentences are picked from the text. Scanned PDFs need OCR first.',
+    translate: conv.translatorSupported() ? 'Translation runs on this device. The first time you use a language pair, the browser downloads it once.' : 'This browser has no on-device translator. Chrome 138 or newer on a desktop has one built in.',
   }[tool.id];
   body.innerHTML = (intro ? `<p class="note">${intro}</p>` : '') + fields.map(fieldHtml).join('') +
     (tool.rotatable ? `<div class="field"><span>Rotate all</span><div class="row">
@@ -415,18 +422,19 @@ async function run() {
     const overlay = h(`<div class="busy-overlay" role="status"><div class="spinner"></div><p>${busyText(tool)}</p><div class="bar"><i></i></div></div>`);
     document.body.append(overlay);
     const progress = (p) => { $('.bar i', overlay).style.width = `${Math.round(p * 100)}%`; };
-    let outputs = [], summary = '';
+    let outputs = [], summary = '', preview = null;
     try {
-      ({ outputs, summary = '' } = await execute(tool, files, opts, progress));
+      ({ outputs, summary = '', preview = null } = await execute(tool, files, opts, progress));
     } finally { overlay.remove(); }
-    done(outputs, summary);
+    done(outputs, summary, preview);
   } catch (e) {
     console.error(e);
     toast(e.message || 'Something went wrong with that file.');
   } finally { if (btn) btn.disabled = false; }
 }
 
-const busyText = (t) => `${t.action.replace(/ PDFs?$/, '')}ing…`.replace('eing', 'ing').replace(/^(Split|Crop)ing/, '$1ting').replace('Cropting', 'Cropping');
+const langName = (c) => byId.translate.fields[1].options.find(([k]) => k === c)?.[1] || c;
+const busyText = (t) => t.busy || `${t.action.replace(/ PDFs?$/, '')}ing…`.replace('eing', 'ing').replace(/^(Split|Crop)ing/, '$1ting').replace('Cropting', 'Cropping');
 
 function validate() {
   const { tool, files, opts, selected, pages } = session;
@@ -487,6 +495,26 @@ async function execute(tool, files, opts, progress) {
     }
     case 'pdf-to-jpg': return { outputs: await each((f, p) => ops.pdfToImages(f, opts, p)) };
     case 'pdf-to-markdown': return { outputs: await each((f) => ops.pdfToMarkdown(f, opts)) };
+    case 'pdf-to-word': return { outputs: await each((f) => conv.pdfToWord(f)) };
+    case 'pdf-to-excel': return { outputs: await each((f) => conv.pdfToExcel(f, opts)) };
+    case 'pdf-to-powerpoint': return { outputs: await each((f, p) => conv.pdfToPowerpoint(f, opts, p)) };
+    case 'ocr': {
+      let read = 0, skipped = 0;
+      const outputs = await each(async (f, p) => { const r = await conv.ocr(f, opts, p); read += r.done; skipped += r.skipped; return r.outputs; });
+      return { outputs, summary: `Read ${read} page${read === 1 ? '' : 's'}${skipped ? `, skipped ${skipped} that already had text` : ''}.` };
+    }
+    case 'summarize': {
+      const r = await conv.summarize(f0, opts);
+      return { outputs: r.outputs, preview: r.preview, summary: `Made with ${r.method}.` };
+    }
+    case 'translate': {
+      const first = await conv.readBlocks(f0);
+      const sample = first.filter((b) => b.t !== 'page').map((b) => b.text).join(' ').slice(0, 2000);
+      const { tr, from } = await conv.openTranslator(opts, sample, progress);
+      try {
+        return { outputs: await conv.translate(f0, first, opts, tr, progress), summary: `Translated from ${langName(from)} to ${langName(opts.to)} on this device.` };
+      } finally { tr.destroy?.(); }
+    }
     case 'rotate': {
       const out = [];
       for (const f of files) out.push(...await ops.rotateFiles([f], f.rotation));
@@ -519,7 +547,7 @@ async function execute(tool, files, opts, progress) {
 }
 
 /* ----------------------------------------------------------------- result */
-async function done(outputs, summary) {
+async function done(outputs, summary, preview) {
   const { tool } = session;
   let file = outputs[0];
   if (outputs.length > 1) {
@@ -540,6 +568,7 @@ async function done(outputs, summary) {
       <p>${summary ? `${esc(summary)} ` : ''}${outputs.length > 1 ? `${outputs.length} files, packed into one zip.` : ''}</p>
       <a class="btn btn-cta btn-xl" id="dl" href="${url}" download="${esc(file.name)}">${icon('download', 22)} Download ${outputs.length > 1 ? 'all' : esc(file.name)}</a>
       <p class="hint">${formatBytes(file.blob.size)}</p>
+      ${preview ? `<div class="preview"><h2>Key points</h2><ul>${preview.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>` : ''}
       <div class="row center">
         <a class="btn btn-ghost" href="#/${tool.id}" id="again">${icon('rotateLeft', 16)} Start over</a>
         <a class="btn btn-ghost" href="#/">All tools</a>
@@ -554,6 +583,8 @@ const doneTitle = (t) => ({
   organize: 'Your PDF is reorganized', scan: 'Your scan is ready', compress: 'Your PDF is compressed', repair: 'Your PDF is repaired',
   'jpg-to-pdf': 'Your images are now a PDF', 'pdf-to-jpg': 'Your pages are now images', 'pdf-to-markdown': 'Your text is ready',
   edit: 'Your edits are saved', rotate: 'Your PDF is rotated', 'page-numbers': 'Page numbers added', watermark: 'Watermark added',
+  ocr: 'Your text is readable now', 'pdf-to-word': 'Your Word file is ready', 'pdf-to-excel': 'Your spreadsheet is ready',
+  'pdf-to-powerpoint': 'Your slides are ready', summarize: 'Here is the short version', translate: 'Your translation is ready',
   crop: 'Your PDF is cropped', sign: 'Your PDF is signed', protect: 'Your PDF is locked', unlock: 'Your PDF is unlocked', redact: 'Your PDF is redacted',
 }[t.id] || 'All done');
 

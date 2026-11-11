@@ -302,8 +302,14 @@ function ToolRunner({ tool }: { tool: ToolDef }) {
               <div className="note note-warning" role="alert">
                 <TriangleAlert size={20} strokeWidth={2} />
                 <span>
-                  This tool needs {missing.join(' and ')} on the machine running Sheaf-D, and it isn&rsquo;t there. The
-                  Docker image has everything; see the README if you run it another way.
+                  {tool.missingHint && missing.every((m) => m === 'translate') ? (
+                    tool.missingHint
+                  ) : (
+                    <>
+                      This tool needs {missing.join(' and ')} on the machine running Sheaf-D, and it isn&rsquo;t there. The
+                      Docker image has everything; see the README if you run it another way.
+                    </>
+                  )}
                 </span>
               </div>
             )}

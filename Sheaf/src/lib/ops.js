@@ -6,7 +6,7 @@ import {
   loadPdf, openForRender, closePdf, renderPage, canvasToBlob, blobBytes, baseName,
 } from './pdf.js';
 
-const out = (name, bytes, type = 'application/pdf') => ({ name, blob: new Blob([bytes], { type }) });
+export const out = (name, bytes, type = 'application/pdf') => ({ name, blob: new Blob([bytes], { type }) });
 
 function hexToRgb(hex) {
   const n = parseInt(hex.replace('#', ''), 16);
@@ -328,40 +328,58 @@ export async function extractLines(pdf) {
   return pages;
 }
 
-export function linesToMarkdown(pages) {
+/**
+ * Reading-order blocks from extracted lines: headings (by font size against the body size),
+ * list items, paragraphs, and a marker at each page end. Markdown, Word and Translate share it.
+ */
+export function linesToBlocks(pages) {
   const sizes = pages.flat().map((l) => Math.round(l.size * 2) / 2);
   const freq = new Map();
   for (const s of sizes) freq.set(s, (freq.get(s) || 0) + 1);
   const body = [...freq.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 10;
-  const md = [];
+  const blocks = [];
   for (const lines of pages) {
     let para = [];
-    const flush = () => { if (para.length) { md.push(para.join(' ').replace(/(\w)- (\w)/g, '$1$2')); md.push(''); para = []; } };
+    const flush = () => { if (para.length) { blocks.push({ t: 'p', text: para.join(' ').replace(/(\w)- (\w)/g, '$1$2') }); para = []; } };
     lines.forEach((l, i) => {
       const prev = lines[i - 1];
       const gap = prev ? prev.y - l.y : 0;
       const ratio = l.size / body;
       if (ratio > 1.15 && l.text.length < 120) {
         flush();
-        md.push(`${ratio > 1.8 ? '#' : ratio > 1.4 ? '##' : '###'} ${l.text}`, '');
+        blocks.push({ t: 'h', level: ratio > 1.8 ? 1 : ratio > 1.4 ? 2 : 3, text: l.text });
         return;
       }
       const bullet = l.text.match(/^([•●▪◦‣\-*–]|\d+[.)])\s+(.*)$/);
       if (bullet) {
         flush();
-        md.push(/^\d/.test(bullet[1]) ? `${bullet[1].replace(')', '.')} ${bullet[2]}` : `- ${bullet[2]}`);
+        blocks.push({ t: 'li', marker: /^\d/.test(bullet[1]) ? bullet[1].replace(')', '.') : null, text: bullet[2] });
         return;
       }
       if (prev && gap > l.size * 1.8) flush();
-      if (!para.length && md.length && /^(- |\d+\. )/.test(md[md.length - 1])) md.push('');
       para.push(l.text);
     });
     flush();
-    md.push('---', '');
+    blocks.push({ t: 'page' });
+  }
+  return blocks;
+}
+
+export function blocksToMarkdown(blocks) {
+  const md = [];
+  for (const b of blocks) {
+    if (b.t === 'h') md.push(`${'#'.repeat(b.level)} ${b.text}`, '');
+    else if (b.t === 'li') md.push(b.marker ? `${b.marker} ${b.text}` : `- ${b.text}`);
+    else if (b.t === 'p') {
+      if (md.length && /^(- |\d+\. )/.test(md[md.length - 1])) md.push('');
+      md.push(b.text, '');
+    } else md.push('---', '');
   }
   while (md.length && (md[md.length - 1] === '' || md[md.length - 1] === '---')) md.pop();
   return md.join('\n').replace(/\n{3,}/g, '\n\n') + '\n';
 }
+
+export const linesToMarkdown = (pages) => blocksToMarkdown(linesToBlocks(pages));
 
 export async function pdfToMarkdown(file, o) {
   const pdf = await openForRender(file.bytes, file.password);
@@ -445,7 +463,7 @@ export async function repair(file) {
  * displayed (rotation included), which is how the editor works. They are mapped back to PDF
  * user space here.
  */
-function toPdfRect(page, it) {
+export function toPdfRect(page, it) {
   // pdf.js displays the crop box, so work relative to it.
   const cb = page.getCropBox();
   const { width, height } = cb;
@@ -524,7 +542,7 @@ export async function applyOverlays(file, items, outName) {
 
 // For drawImage/drawText with rotation, the origin is the bottom-left corner of the
 // content in its own (rotated) frame. Map from our un-rotated user-space rect.
-function rotatedOrigin(r) {
+export function rotatedOrigin(r) {
   switch (r.rot) {
     case 90: return { x: r.x + r.w, y: r.y };
     case 180: return { x: r.x + r.w, y: r.y + r.h };

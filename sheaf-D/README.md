@@ -4,7 +4,7 @@ A PDF toolkit you host yourself. It does what the big online PDF sites do (merge
 
 It's the full version of the toolkit: alongside the everyday tools it converts Word, Excel and PowerPoint, runs OCR, makes PDF/A and turns web pages into PDFs, because the container ships LibreOffice, Tesseract, Ghostscript and Chromium. If you only need what a browser can do on its own, [Sheaf](../Sheaf/) is lighter and needs no Docker.
 
-There are 29 tools. You pick one, drop your files in, set a few options, and download the result.
+There are 32 tools. You pick one, drop your files in, set a few options, and download the result.
 
 ## Setup
 
@@ -28,12 +28,13 @@ By default the app is only reachable from the computer it runs on. If you want o
 
 | Family | Tools |
 | --- | --- |
-| Organize | Merge PDF, Split PDF, Remove pages, Extract pages, Organize PDF, Scan to PDF |
+| Organize | Merge PDF, Split PDF, Remove pages, Extract pages, Organize PDF, Scan to PDF, Workflow |
 | Optimize | Compress PDF, Repair PDF, OCR PDF |
 | Convert to PDF | JPG to PDF, Word to PDF, PowerPoint to PDF, Excel to PDF, HTML to PDF |
 | Convert from PDF | PDF to JPG, PDF to Word, PDF to PowerPoint, PDF to Excel, PDF to PDF/A |
 | Edit | Edit PDF, Rotate PDF, Add page numbers, Add watermark, Crop PDF |
 | Security | Unlock PDF, Protect PDF, Sign PDF, Redact PDF, Compare PDF |
+| Read & translate | Summarize PDF, Translate PDF (optional, see below) |
 
 A few things worth knowing:
 
@@ -42,9 +43,11 @@ A few things worth knowing:
 - **Sign adds a visible signature**, drawn, typed or uploaded. It is not a certificate-based digital signature.
 - **Scan to PDF uses your camera**, which browsers only allow on `localhost` or over HTTPS.
 - **HTML to PDF fetches the address you give it** from the machine running Sheaf-D. That is the one tool that talks to the outside world, and only when you ask it to.
+- **Edit's highlighter comes in six colours** plus a picker for any other colour. Pen, shapes and text have their own colour row.
+- **Workflow chains tools.** Pick up to eight steps from Merge, Rotate, Compress, Repair, OCR, Page numbers, Watermark (text), PDF/A, Unlock and Protect. Each step works on what the one before it produced. Merge can only go first and Protect only last.
+- **Summarize picks the key sentences** from the PDF's own text and lists its main sections. No language model is involved, so it's quick and works on any machine. Scanned PDFs need OCR first.
+- **Translate runs offline with Argos Translate**, but it is off unless you switch it on at build time (next section), because each language adds a few hundred MB to the image. Layout isn't kept: you get the translated text as a Word or Markdown file.
 - **Uploads are deleted as soon as the result has been sent back.** In the Docker setup they only ever exist in memory.
-
-Two tools from the usual online suites are left out on purpose: translating and summarising PDFs both need a large language model, and that doesn't fit "runs on your machine with no outside calls".
 
 ## Settings
 
@@ -61,6 +64,14 @@ OCR ships with English, German, French, Spanish, Italian, Portuguese and Dutch. 
 ```sh
 docker compose build --build-arg OCR_LANGS="deu jpn chi_sim"
 ```
+
+Translate PDF needs language packs, which aren't installed by default. List two-letter codes when you build and English to and from each one gets installed (other pairs go through English):
+
+```sh
+TRANSLATE_LANGS="es fr de" docker compose up -d --build
+```
+
+This adds Argos Translate and a CPU-only build of PyTorch, roughly 1 GB on top of the usual image, plus 100 to 200 MB per language. Downloading the packs is the only part of the build that needs the Argos package index; once built, translating never leaves the machine.
 
 The gear icon in the app opens a small settings panel with the theme (light, dark or follow the system), the background colour, and a list of which engines the server found.
 
@@ -82,7 +93,8 @@ Every tool that needs an outside program will tell you when that program is miss
 | OCRmyPDF and Tesseract | OCR, PDF to PDF/A |
 | Poppler (`pdftoppm`, `pdfimages`) | PDF to JPG |
 | Chromium or Chrome | HTML to PDF |
-| Python 3 with `pdf2docx`, `pdfplumber`, `openpyxl`, `Pillow` | PDF to Word, PDF to Excel, JPG to PDF, Scan to PDF |
+| Python 3 with `pdf2docx`, `pdfplumber`, `openpyxl`, `Pillow` | PDF to Word, PDF to Excel, JPG to PDF, Scan to PDF, Summarize |
+| `argostranslate` (optional) | Translate. Install it with pip, then run `python3 server/py/install_argos.py es fr` for the languages you want |
 
 On Debian or Ubuntu that is roughly:
 
@@ -123,4 +135,4 @@ Adding a server tool: write a function in `server/src/tools/` that takes the upl
 
 ## Credits
 
-Sheaf-D is glue around some excellent open source software: qpdf, Ghostscript, LibreOffice, OCRmyPDF, Tesseract, Poppler, Chromium, pdf.js, pdf-lib and pdf2docx. Each has its own licence. Ghostscript in particular is AGPL, which matters if you plan to offer this as a service to other people.
+Sheaf-D is glue around some excellent open source software: qpdf, Ghostscript, LibreOffice, OCRmyPDF, Tesseract, Poppler, Chromium, pdf.js, pdf-lib, pdf2docx and, if you turn it on, Argos Translate. Each has its own licence. Ghostscript in particular is AGPL, which matters if you plan to offer this as a service to other people.

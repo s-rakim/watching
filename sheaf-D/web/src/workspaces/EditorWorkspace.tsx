@@ -69,7 +69,14 @@ const TOOLSETS: Record<string, { id: ToolId; label: string; key: string; icon: L
 };
 
 const COLOURS = ['#1f1a14', '#c9252b', '#0a62a0', '#17733a', '#ff6b3d', '#ffffff'];
-const HIGHLIGHTS = ['#ffe14d', '#8fd14f', '#ff9ec3', '#7fd3ff'];
+const HIGHLIGHTS: [string, string][] = [
+  ['#ffe14d', 'Yellow'],
+  ['#8fd14f', 'Green'],
+  ['#7fd3ff', 'Blue'],
+  ['#ff9ec3', 'Pink'],
+  ['#ffb763', 'Orange'],
+  ['#c9a7ff', 'Purple'],
+];
 const MIN_BOX = 4;
 
 interface Drag {
@@ -333,7 +340,7 @@ export default function EditorWorkspace({ tool, items, submit, reset, error }: W
     font: 'sans',
     bold: false,
     fill: false,
-    highlight: HIGHLIGHTS[0],
+    highlight: HIGHLIGHTS[0][0],
   });
   const [stamp, setStamp] = useState<Stamp | null>(null);
   const [signatures, setSignatures] = useState<Stamp[]>([]);
@@ -913,9 +920,15 @@ export default function EditorWorkspace({ tool, items, submit, reset, error }: W
         <div className="field">
           <span className="field-label">Highlighter</span>
           <div className="color-row">
-            {HIGHLIGHTS.map((c) => {
+            <input
+              type="color"
+              value={sel?.type === 'highlight' ? sel.color : style.highlight}
+              onChange={(e) => restyle({ highlight: e.target.value })}
+              aria-label="Custom highlighter colour"
+            />
+            {HIGHLIGHTS.map(([c, name]) => {
               const on = (sel?.type === 'highlight' ? sel.color : style.highlight) === c;
-              return <button key={c} className={`swatch${on ? ' is-on' : ''}`} style={{ background: c }} aria-label={`Highlighter ${c}`} onClick={() => restyle({ highlight: c })} />;
+              return <button key={c} className={`swatch${on ? ' is-on' : ''}`} style={{ background: c }} aria-label={`${name} highlighter`} title={name} onClick={() => restyle({ highlight: c })} />;
             })}
           </div>
         </div>

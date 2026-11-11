@@ -6,7 +6,7 @@ Two PDF toolkits that keep your files on your own machine. They share a look and
 | --- | --- | --- |
 | Runs as | A static site in your browser | A Docker container with a small server |
 | Needs | Node 20+ to build it, then any web server | Docker with Compose |
-| Tools | 21: organise, compress, repair, JPG ↔ PDF, PDF to Markdown, edit, sign, protect, unlock, redact, compare and more | 29: everything in Sheaf except PDF to Markdown, plus Word, Excel and PowerPoint to and from PDF, OCR, HTML to PDF and PDF/A |
+| Tools | 27: organise, compress, repair, OCR, JPG ↔ PDF, PDF to Word, Excel, PowerPoint and Markdown, edit, sign, protect, unlock, redact, compare, summarise, translate and more | 32: everything in Sheaf except PDF to Markdown, plus Word, Excel, PowerPoint and HTML to PDF, PDF/A and workflows that chain several tools |
 | Files go | Nowhere. The browser does all the work | To the container on your machine, held in memory and dropped once you've downloaded the result |
 
 ## Sheaf (browser)
