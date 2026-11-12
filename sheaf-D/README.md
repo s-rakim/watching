@@ -20,7 +20,26 @@ Then open <http://localhost:8080>.
 
 The first build takes a while because it pulls in LibreOffice, Chromium and the OCR language data. The finished image is around 2 GB. After that it starts in a couple of seconds.
 
-To stop it: `docker compose down`. To update: `git pull`, then `docker compose up -d --build` again.
+To stop it: `docker compose down`. To update: `git pull`, then `docker compose up -d --build` again, or switch to automatic updates below.
+
+### Automatic updates
+
+Every change to `sheaf-D/` that lands on `main` builds a fresh image and publishes it as `ghcr.io/s-rakim/sheaf-d:latest`. `docker-compose.ghcr.yml` runs that image instead of building one, plus a small [Watchtower](https://github.com/nicholas-fedor/watchtower) container that checks for a new image every 30 minutes, pulls it and restarts Sheaf-D:
+
+```sh
+cd watching/sheaf-D
+docker compose down                          # if the self-built one is running
+docker compose -f docker-compose.ghcr.yml up -d
+```
+
+Anyone with Sheaf-D open in a browser sees "Sheaf-D was updated on the server" with a **Reload** button. The page never reloads on its own, so a half-finished edit isn't lost. A conversion that happens to be running at the moment of the restart fails and has to be started again.
+
+Things to know:
+
+- Watchtower is given the Docker socket so it can restart containers. It only touches containers labelled `com.centurylinklabs.watchtower.enable=true`, which in this file is just Sheaf-D.
+- The image is built with the default OCR and translation languages. If you need `OCR_LANGS` or `TRANSLATE_LANGS`, keep building it yourself with `docker-compose.yml`.
+- The first time the workflow publishes the package, GitHub may make it private. If `docker compose pull` says "unauthorized", open the package under your GitHub profile's **Packages** tab, then **Package settings → Change visibility → Public**.
+- To check right now instead of waiting: `docker compose -f docker-compose.ghcr.yml pull && docker compose -f docker-compose.ghcr.yml up -d`.
 
 By default the app is only reachable from the computer it runs on. If you want other devices on your network to use it, change the port line in `docker-compose.yml` from `127.0.0.1:8080:8080` to `8080:8080`. There are no user accounts, so only do that on a network you trust.
 
@@ -86,7 +105,7 @@ docker buildx build --platform linux/amd64,linux/arm64 \
   -t ghcr.io/<you>/sheaf-d:latest --push .
 ```
 
-The repository also has a GitHub Actions workflow, **Sheaf-D image** (`.github/workflows/sheaf-d-image.yml`), that does the same and publishes `ghcr.io/s-rakim/sheaf-d`. It only runs when started from the Actions tab or when a tag like `sheaf-d-v1.0.0` is pushed. To use the published image instead of building, replace `build: .` in `docker-compose.yml` with `image: ghcr.io/s-rakim/sheaf-d:latest` and run `docker compose up -d`.
+The repository also has a GitHub Actions workflow, **Sheaf-D image** (`.github/workflows/sheaf-d-image.yml`), that does the same and publishes `ghcr.io/s-rakim/sheaf-d`. It runs on every change to `sheaf-D/` merged to `main`, when started from the Actions tab, or when a tag like `sheaf-d-v1.0.0` is pushed. Each image is tagged `latest`, the short commit hash, and the version for tagged builds. [Automatic updates](#automatic-updates) explains how to run it.
 
 The arm64 half is built under emulation on GitHub's runners, so the first run takes a while (LibreOffice and Chromium are large). Later runs reuse the cache.
 

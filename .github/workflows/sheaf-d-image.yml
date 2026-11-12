@@ -1,11 +1,20 @@
 # Builds the Sheaf-D image for Intel/AMD and ARM machines and publishes it to the GitHub
-# container registry. Runs only when started by hand or when a sheaf-d-v* tag is pushed.
+# container registry. Runs on every change to sheaf-D/ that lands on main, on a sheaf-d-v*
+# tag, or by hand. Machines running docker-compose.ghcr.yml pick up :latest by themselves
+# through Watchtower (see sheaf-D/README.md).
 name: Sheaf-D image
 
 on:
   workflow_dispatch:
   push:
+    branches: [main]
+    paths: ['sheaf-D/**', '.github/workflows/sheaf-d-image.yml']
     tags: ['sheaf-d-v*']
+
+# A newer push replaces a build that is still running.
+concurrency:
+  group: sheaf-d-image-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -33,6 +42,7 @@ jobs:
           images: ghcr.io/${{ github.repository_owner }}/sheaf-d
           tags: |
             type=match,pattern=sheaf-d-v(.*),group=1
+            type=sha,format=short
             type=raw,value=latest
 
       - uses: docker/build-push-action@v6

@@ -30,6 +30,10 @@ npm run dev
 
 Then open <http://localhost:5173>. Edits reload in place.
 
+### Updating
+
+If you host it with `npm run serve`, stop it and run `npm run update`: that pulls the latest code, installs any new packages and starts it again. Browsers that already have Sheaf open, or installed as an app, show **A new version of Sheaf is ready** with a **Reload** button within the hour (or as soon as the tab is opened again). Nothing reloads by itself, so a half-signed document isn't lost.
+
 ### Building it for hosting
 
 ```sh
@@ -113,6 +117,25 @@ base64 -w0 sheaf.jks   # paste the output into SHEAF_KEYSTORE_BASE64
 ```
 
 Keep that file somewhere safe. Android only accepts an update signed with the same key as the installed app.
+
+Until those secrets exist, every workflow run signs with a fresh debug key, so each new APK has to be installed over an uninstall. Live updates (below) don't have that problem: they never touch the APK.
+
+### Live updates
+
+The app updates itself when a change to `Sheaf/` lands on `main`, without a new APK:
+
+1. The `Sheaf live update` workflow builds the web app and publishes it to the `sheaf-live` branch: a `manifest.json` with every file's SHA-256, and the files themselves under `blobs/`.
+2. A few seconds after the app opens, and when it comes back to the foreground after an hour or more, it reads `manifest.json` from `raw.githubusercontent.com`.
+3. It downloads only the files that changed (usually the app's JavaScript, a few MB) and checks each one's hash. Unchanged files, like the 30 MB of OCR data, are copied from what's already on the phone.
+4. It shows **A new version of Sheaf is ready** with a **Restart** button. Ignore it and the new version is used the next time the app opens.
+
+If a new version fails to start, close and reopen the app: it goes back to the previous version and never tries the broken one again. A new version only becomes permanent after it has started up properly.
+
+Live updates can only change the web side (everything in `src/`, `index.html`, `public/`). Anything that changes the APK itself (`android/`, `capacitor.config.json`, or adding or upgrading a `@capacitor/*` package) needs a new APK. The workflow works this out by comparing with the release tags, so there's nothing to set by hand: phones on an older APK won't get that update and, once a new APK is released, see **Sheaf 0.x.y needs a new install of the app** with a **Download** button. When you release that APK, the live workflow runs again by itself.
+
+To check on it, open the latest `Sheaf live update` run in the Actions tab: the summary says which version it published and which APK it needs.
+
+The APK from release 0.1.0 predates this, so install the next APK release once and everything after that can come over the air.
 
 Building it yourself needs Android Studio (or the Android SDK) and JDK 21:
 

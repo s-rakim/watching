@@ -1,7 +1,7 @@
 import { createWriteStream, existsSync, promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import archiver from 'archiver';
 import express, { NextFunction, Request, Response } from 'express';
 import multer from 'multer';
@@ -145,8 +145,23 @@ function detect() {
   return capabilities;
 }
 
+// Every build gives index.html new asset names, so a hash of it tells an open tab that the
+// server was updated underneath it (for example by Watchtower pulling a new image).
+let build: string | undefined;
+async function buildId(): Promise<string> {
+  if (build === undefined) {
+    try {
+      build = createHash('sha256').update(await fs.readFile(path.join(WEB_DIST, 'index.html'))).digest('hex').slice(0, 12);
+    } catch {
+      build = 'dev';
+    }
+  }
+  return build;
+}
+
 app.get('/api/health', async (_req, res) => {
-  res.json({ ok: true, ...(await detect()) });
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ ok: true, build: await buildId(), ...(await detect()) });
 });
 
 app.post('/api/tools/:tool', openJob, upload.any(), async (req, res, next) => {
