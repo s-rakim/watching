@@ -489,7 +489,7 @@ export const TOOLS: ToolDef[] = [
   {
     id: 'pdf-to-word',
     name: 'PDF to Word',
-    blurb: 'Turn a PDF into an editable DOCX, keeping the layout where it can.',
+    blurb: 'Turn a PDF into an editable DOCX that looks like the original, with its fonts, colours, tables and pictures.',
     category: 'convert-from',
     icon: FileType,
     accept: ['pdf'],
@@ -498,6 +498,18 @@ export const TOOLS: ToolDef[] = [
     action: 'Convert to Word',
     working: 'Rebuilding your document',
     needs: ['python'],
+    defaults: { layout: 'layout' },
+    fields: [
+      {
+        type: 'choice',
+        key: 'layout',
+        label: 'Layout',
+        options: [
+          { value: 'layout', label: 'Same layout', hint: 'Every line stays where it was, over the boxes, lines and pictures' },
+          { value: 'flow', label: 'Flowing text', hint: 'Running paragraphs and tables, easier to retype into' },
+        ],
+      },
+    ],
   },
   {
     id: 'pdf-to-powerpoint',

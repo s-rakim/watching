@@ -47,7 +47,7 @@ To use it from your other devices over Tailscale, `npm run serve` builds it and 
 
 - `src/tools.js` lists every tool: its category, workspace type and option fields. Adding a tool starts here.
 - `src/lib/ops.js` holds the PDF work itself (pdf-lib for writing, pdf.js for rendering and text).
-- `src/lib/convert.js` has PDF to Word, Excel and PowerPoint, OCR, Summarize and Translate; `src/lib/office.js` writes the .docx, .xlsx and .pptx files.
+- `src/lib/convert.js` has PDF to Word, Excel and PowerPoint, OCR, Summarize and Translate; `src/lib/office.js` writes the .docx, .xlsx and .pptx files. `src/lib/wordlayout.js` reads each page's text, fonts, colours and graphics for the Same layout option of PDF to Word.
 - `scripts/copy-ocr.mjs` copies Tesseract and its language data into `public/ocr` before `dev` and `build`, so OCR never fetches anything from a CDN.
 - `src/main.js` is the shell: routing, upload, the options panel, file and page grids, the result screen.
 - `src/editor.js` is the page editor behind Edit, Sign, Redact and Crop.
@@ -126,7 +126,7 @@ cd android && ./gradlew assembleRelease
 - Compress re-encodes embedded JPEGs and leaves text and vector content alone, so files that are mostly text will not shrink much.
 - Redact flattens the pages it touches into images so the hidden content is gone from the file, not just covered.
 - OCR runs Tesseract compiled to WebAssembly. English, Spanish, French, German, Italian and Portuguese are bundled (about 30 MB, loaded only when you use OCR). It's slower than Sheaf-D's OCR on big scans.
-- PDF to Word keeps the text, headings and lists, not the exact layout or images. PDF to Excel splits lines into columns where the gaps are, which works well on reports and statements made from spreadsheets. PDF to PowerPoint puts a picture of each page on its own slide.
+- PDF to Word has two layouts. Same layout (the default) keeps the page size and puts every line of text where it was, in its own font, size, weight and colour, over a picture of everything that isn't text: table borders, boxes, charts, logos and photos. The text is editable; the boxes and pictures behind it are one image per page, so they can't be edited piece by piece. Word uses the PDF's fonts if they're installed and a similar one if not. Flowing text gives plain paragraphs, headings and lists instead. PDF to Excel splits lines into columns where the gaps are, which works well on reports and statements made from spreadsheets. PDF to PowerPoint puts a picture of each page on its own slide.
 - Summarize uses the summariser built into recent Chrome when there is one, and otherwise picks the key sentences from the text itself.
 - Translate has two engines. **Automatic** (the default) uses DeepL when it's set up and the browser's own translator otherwise; you can also pick either. DeepL: Put your key in `Sheaf/.env` as `DEEPL_AUTH_KEY=your-key` (the free plan works) and start Sheaf with `npm run serve` or `npm run dev`: the Vite server relays the calls and adds the key, so the browser never sees it and DeepL's block on calls from web pages doesn't apply. On a plain static host there is no relay, so pick "On this device" instead, which uses Chrome's built-in translator (Chrome 138+ on desktop) and sends nothing anywhere. Either way you get the translated text as Word or Markdown; layout isn't kept. For a translated PDF with the layout intact, use Sheaf-D.
 - Word, Excel, PowerPoint and HTML to PDF, PDF/A and workflows need real software (LibreOffice, Chromium, Ghostscript) and live in Sheaf-D.

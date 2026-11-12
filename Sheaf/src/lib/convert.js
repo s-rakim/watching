@@ -4,7 +4,8 @@
 import { StandardFonts, degrees } from '@cantoo/pdf-lib';
 import { loadPdf, openForRender, closePdf, renderPage, canvasToBlob, blobBytes, baseName } from './pdf.js';
 import { extractLines, linesToBlocks, blocksToMarkdown, toPdfRect, rotatedOrigin, out } from './ops.js';
-import { buildDocx, buildXlsx, buildPptx } from './office.js';
+import { buildDocx, buildLayoutDocx, buildXlsx, buildPptx } from './office.js';
+import { openForWord, readLayout } from './wordlayout.js';
 
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
@@ -19,11 +20,18 @@ const deadline = (promise, ms, msg) => Promise.race([promise, new Promise((_, no
 const noText = (name) => new Error(`${name} has no text layer to read. Run OCR PDF on it first.`);
 
 /* ---------- PDF to Word ---------- */
-export async function pdfToWord(file) {
-  const pages = await readLines(file);
-  if (!pages.some((p) => p.length)) throw noText(file.name);
-  const blob = await buildDocx(linesToBlocks(pages), { title: baseName(file.name) });
-  return [{ name: `${baseName(file.name)}.docx`, blob }];
+// "layout" (the default) keeps the page looking the same: every line where it was, in its
+// own font and colour, over a picture of the boxes, lines and images. "flow" gives plain
+// running text with headings and lists, for when the words matter more than the look.
+export async function pdfToWord(file, o = {}, onProgress) {
+  const title = baseName(file.name);
+  if (o.layout === 'flow') {
+    const pages = await readLines(file);
+    if (!pages.some((p) => p.length)) throw noText(file.name);
+    return [{ name: `${title}.docx`, blob: await buildDocx(linesToBlocks(pages), { title }) }];
+  }
+  const pages = await readLayout(await openForWord(file.bytes, file.password), onProgress);
+  return [{ name: `${title}.docx`, blob: await buildLayoutDocx(pages, { title }) }];
 }
 
 /* ---------- PDF to Excel ----------

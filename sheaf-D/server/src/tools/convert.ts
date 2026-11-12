@@ -50,9 +50,14 @@ export const pdfToWord: Tool = async (job) => {
   for (const file of job.files) {
     const name = `${stem(file.name)}.docx`;
     const out = job.out(`${outs.length}-${name}`);
-    try {
-      await python('pdf_to_docx.py', [file.path, out]);
+    const mode = job.opts.layout === 'flow' ? 'flow' : 'layout';
+    // If the chosen way fails on an odd file, the other one usually still copes.
+    const attempt = async (m: string) => {
+      await python('pdf_to_docx.py', [file.path, out, m]);
       if (!(await exists(out))) throw new Error('no output');
+    };
+    try {
+      await attempt(mode).catch(() => attempt(mode === 'flow' ? 'layout' : 'flow'));
       outs.push({ path: out, name });
     } catch {
       // LibreOffice's own PDF import is rougher, but better than nothing.
