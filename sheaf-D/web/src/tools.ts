@@ -505,7 +505,7 @@ export const TOOLS: ToolDef[] = [
         key: 'layout',
         label: 'Layout',
         options: [
-          { value: 'layout', label: 'Same layout', hint: 'Every line stays where it was, over the boxes, lines and pictures' },
+          { value: 'layout', label: 'Same layout', hint: 'Real tables, boxes and pictures you can move, with text that reflows' },
           { value: 'flow', label: 'Flowing text', hint: 'Running paragraphs and tables, easier to retype into' },
         ],
       },
@@ -514,7 +514,7 @@ export const TOOLS: ToolDef[] = [
   {
     id: 'pdf-to-powerpoint',
     name: 'PDF to PowerPoint',
-    blurb: 'Turn each page into a slide in an editable PPTX.',
+    blurb: 'Turn each page into a slide with text boxes, shapes and pictures you can edit.',
     category: 'convert-from',
     icon: Presentation,
     accept: ['pdf'],
@@ -522,7 +522,7 @@ export const TOOLS: ToolDef[] = [
     noun: 'PDF',
     action: 'Convert to PowerPoint',
     working: 'Building your slides',
-    needs: ['libreoffice'],
+    needs: ['python'],
   },
   {
     id: 'pdf-to-excel',

@@ -1,6 +1,9 @@
 import { existsSync, promises as fs } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import archiver from 'archiver';
+import { createWriteStream } from 'node:fs';
+import { buildEditableDocx, buildEditablePptx, type FlowMedia, type FlowPage, type Region } from '../docxflow.js';
 import { Job, Output, Tool, UserError, exists, ext, listFiles, needFiles, python, run, stem } from '../lib.js';
 
 const SOFFICE = process.env.SOFFICE_BIN || 'soffice';
@@ -44,20 +47,75 @@ export const wordToPdf = officeToPdf('word');
 export const powerpointToPdf = officeToPdf('powerpoint');
 export const excelToPdf = officeToPdf('excel');
 
+/**
+ * PDF to an editable Word file or PowerPoint deck: PyMuPDF lists what is on each page (text, boxes, lines,
+ * pictures) and docxflow.js, the same engine the browser app uses, turns that into real
+ * tables, boxes, paragraphs and separate pictures. Charts and other drawings Word can't
+ * edit become pictures of just that area, rendered in a second pass.
+ */
+async function editableOffice(job: Job, src: string, out: string, build: typeof buildEditableDocx = buildEditableDocx): Promise<void> {
+  const dir = path.join(job.dir, `elements-${Math.random().toString(36).slice(2, 8)}`);
+  await python('pdf_to_docx.py', [src, dir, 'elements']);
+  const data = JSON.parse(await fs.readFile(path.join(dir, 'elements.json'), 'utf8')) as {
+    title: string; pages: FlowPage[]; media: Record<string, { file: string; ext: 'png' | 'jpeg' }>;
+  };
+  const media: FlowMedia = {};
+  for (const [id, m] of Object.entries(data.media)) {
+    media[id] = { bytes: new Uint8Array(await fs.readFile(path.join(dir, m.file))), ext: m.ext };
+  }
+  const keyOf = (pi: number, b: Region) => `r${pi}-${[b.x, b.y, b.w, b.h].map((v) => Math.round(v * 100)).join('-')}`;
+  // First pass only notes which areas need a picture; the second has them.
+  const wanted = new Map<string, Region & { page: number; key: string }>();
+  const blank = new Uint8Array(0);
+  await build(data.pages, media, async (pi, b) => {
+    const key = keyOf(pi, b);
+    wanted.set(key, { page: pi, key, x: b.x, y: b.y, w: b.w, h: b.h });
+    return blank;
+  }, { title: data.title });
+  const rendered = new Map<string, Uint8Array>();
+  if (wanted.size) {
+    const spec = path.join(dir, 'regions.json');
+    await fs.writeFile(spec, JSON.stringify([...wanted.values()]));
+    await python('pdf_to_docx.py', [src, dir, 'regions', spec]);
+    for (const key of wanted.keys()) {
+      const file = path.join(dir, `${key}.png`);
+      if (await exists(file)) rendered.set(key, new Uint8Array(await fs.readFile(file)));
+    }
+  }
+  const files = await build(data.pages, media, async (pi, b) => rendered.get(keyOf(pi, b)) ?? blank,
+    { title: data.title });
+  await new Promise<void>((resolve, reject) => {
+    const zip = archiver('zip', { zlib: { level: 6 } });
+    const stream = createWriteStream(out);
+    stream.on('close', () => resolve());
+    zip.on('error', reject);
+    zip.pipe(stream);
+    // [Content_Types].xml first, as Word expects
+    const names = Object.keys(files).sort((a, b) => Number(b === '[Content_Types].xml') - Number(a === '[Content_Types].xml'));
+    for (const name of names) {
+      const v = files[name];
+      zip.append(typeof v === 'string' ? v : Buffer.from(v), { name, store: /\.(png|jpe?g)$/.test(name) });
+    }
+    void zip.finalize();
+  });
+  await fs.rm(dir, { recursive: true, force: true });
+}
+
 export const pdfToWord: Tool = async (job) => {
   needFiles(job, 1, 'PDF');
   const outs: Output[] = [];
   for (const file of job.files) {
     const name = `${stem(file.name)}.docx`;
     const out = job.out(`${outs.length}-${name}`);
-    const mode = job.opts.layout === 'flow' ? 'flow' : 'layout';
+    const flow = job.opts.layout === 'flow';
     // If the chosen way fails on an odd file, the other one usually still copes.
-    const attempt = async (m: string) => {
-      await python('pdf_to_docx.py', [file.path, out, m]);
+    const viaFlow = async () => {
+      await python('pdf_to_docx.py', [file.path, out, 'flow']);
       if (!(await exists(out))) throw new Error('no output');
     };
+    const viaElements = () => editableOffice(job, file.path, out);
     try {
-      await attempt(mode).catch(() => attempt(mode === 'flow' ? 'layout' : 'flow'));
+      await (flow ? viaFlow() : viaElements()).catch(() => (flow ? viaElements() : viaFlow()));
       outs.push({ path: out, name });
     } catch {
       // LibreOffice's own PDF import is rougher, but better than nothing.
@@ -72,8 +130,16 @@ export const pdfToPowerpoint: Tool = async (job) => {
   needFiles(job, 1, 'PDF');
   const outs: Output[] = [];
   for (const file of job.files) {
-    const made = await office(job, file.path, 'pptx:Impress MS PowerPoint 2007 XML', 'impress_pdf_import');
-    outs.push({ path: made, name: `${stem(file.name)}.pptx` });
+    const name = `${stem(file.name)}.pptx`;
+    const out = job.out(`${outs.length}-${name}`);
+    try {
+      // text boxes, shapes and pictures where they were on the page
+      await editableOffice(job, file.path, out, buildEditablePptx);
+      outs.push({ path: out, name });
+    } catch {
+      const made = await office(job, file.path, 'pptx:Impress MS PowerPoint 2007 XML', 'impress_pdf_import');
+      outs.push({ path: made, name });
+    }
   }
   return outs;
 };

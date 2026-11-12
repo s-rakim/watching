@@ -4,8 +4,11 @@
 import { StandardFonts, degrees } from '@cantoo/pdf-lib';
 import { loadPdf, openForRender, closePdf, renderPage, canvasToBlob, blobBytes, baseName } from './pdf.js';
 import { extractLines, linesToBlocks, blocksToMarkdown, toPdfRect, rotatedOrigin, out } from './ops.js';
-import { buildDocx, buildLayoutDocx, buildXlsx, buildPptx } from './office.js';
-import { openForWord, readLayout } from './wordlayout.js';
+import { buildDocx, buildXlsx, buildPptx } from './office.js';
+import JSZip from 'jszip';
+import { openForWord, readEditable } from './wordlayout.js';
+import { buildEditableDocx, buildEditablePptx } from './docxflow.js';
+import { cleanText, readingOrder, gapBetween } from './textorder.js';
 
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
@@ -30,8 +33,14 @@ export async function pdfToWord(file, o = {}, onProgress) {
     if (!pages.some((p) => p.length)) throw noText(file.name);
     return [{ name: `${title}.docx`, blob: await buildDocx(linesToBlocks(pages), { title }) }];
   }
-  const pages = await readLayout(await openForWord(file.bytes, file.password), onProgress);
-  return [{ name: `${title}.docx`, blob: await buildLayoutDocx(pages, { title }) }];
+  const pdf = await openForWord(file.bytes, file.password);
+  try {
+    const { pages, media, renderRegion } = await readEditable(pdf, onProgress);
+    const files = await buildEditableDocx(pages, media, renderRegion, { title });
+    const zip = new JSZip();
+    for (const [path, data] of Object.entries(files)) zip.file(path, data);
+    return [{ name: `${title}.docx`, blob: await zip.generateAsync({ type: 'blob', mimeType: DOCX, compression: 'DEFLATE' }) }];
+  } finally { await closePdf(pdf); }
 }
 
 /* ---------- PDF to Excel ----------
@@ -46,14 +55,20 @@ function lineCells(l) {
     // pdf.js fills wide gaps with a whitespace item; skipping it leaves the gap measurable
     if (!r.str.trim()) continue;
     if (cur && r.x - cur.end < l.size * 0.9) {
-      if (r.x - cur.end > l.size * 0.15 && !cur.text.endsWith(' ') && !r.str.startsWith(' ')) cur.text += ' ';
-      cur.text += r.str; cur.end = Math.max(cur.end, r.x + r.w);
+      cur.runs.push(r); cur.end = Math.max(cur.end, r.x + r.w);
     } else {
-      cur = { x: r.x, end: r.x + r.w, text: r.str };
+      cur = { x: r.x, end: r.x + r.w, runs: [r] };
       cells.push(cur);
     }
   }
-  return cells.map((c) => ({ ...c, text: c.text.replace(/\s+/g, ' ').trim() })).filter((c) => c.text);
+  return cells.map((c) => {
+    let text = '', prev = null;
+    for (const r of readingOrder(c.runs)) {
+      if (prev && gapBetween(prev, r) > l.size * 0.15 && !text.endsWith(' ') && !r.str.startsWith(' ')) text += ' ';
+      text += r.str; prev = r;
+    }
+    return { x: c.x, end: c.end, text: cleanText(text).replace(/\s+/g, ' ').trim() };
+  }).filter((c) => c.text);
 }
 
 function cellValue(s) {
@@ -101,6 +116,17 @@ export async function pdfToExcel(file, o) {
 
 /* ---------- PDF to PowerPoint ---------- */
 export async function pdfToPowerpoint(file, o, onProgress) {
+  if (o.slides !== 'pictures') {
+    const pdf = await openForWord(file.bytes, file.password);
+    try {
+      const { pages, media, renderRegion } = await readEditable(pdf, onProgress);
+      const files = await buildEditablePptx(pages, media, renderRegion, { title: baseName(file.name) });
+      const zip = new JSZip();
+      for (const [path, data] of Object.entries(files)) zip.file(path, data);
+      const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', compression: 'DEFLATE' });
+      return [{ name: `${baseName(file.name)}.pptx`, blob }];
+    } finally { await closePdf(pdf); }
+  }
   const pdf = await openForRender(file.bytes, file.password);
   const slides = [];
   const scale = Number(o.dpi || 150) / 72;
@@ -205,11 +231,14 @@ const STOP = new Set(('a about above after again against all am an and any are a
   + ' le la les des du de et en un une est que qui pour dans sur pas par au aux el los las del y por con para una es se lo der die das und ist mit den dem ein eine zu von nicht il di che per non con')
   .split(' '));
 
+// Chinese, Japanese and Korean (and Thai) don't put spaces between words.
+const UNSPACED = /[\u0e00-\u0e7f\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff\uac00-\ud7af]/;
+
 export function splitSentences(text) {
   // a full stop between digits (3.5, 1.250) is not the end of a sentence
   const t = text.replace(/\s+/g, ' ').replace(/(\d)\.(\d)/g, '$1\u2024$2');
-  return (t.match(/[^.!?]+(?:[.!?]+["')\]]*|$)/g) || []).map((s) => s.trim().replace(/\u2024/g, '.'))
-    .filter((s) => s.split(' ').length >= 5 && (s.match(/\d/g) || []).length < s.length * 0.25);
+  return (t.match(/[^.!?。！？।]+(?:[.!?。！？।]+["')\]」』]*|$)/g) || []).map((s) => s.trim().replace(/\u2024/g, '.'))
+    .filter((s) => (s.split(' ').length >= 5 || (UNSPACED.test(s) && s.length >= 8)) && (s.match(/\d/g) || []).length < s.length * 0.25);
 }
 
 export function extractiveSummary(blocks, count) {
@@ -220,7 +249,12 @@ export function extractiveSummary(blocks, count) {
     if (b.t !== 'p' && b.t !== 'li') continue;
     for (const s of splitSentences(b.text)) sentences.push({ s, pos: sentences.length, early: sinceHeading++ < 2 });
   }
-  const words = (s) => s.toLowerCase().match(/\p{L}[\p{L}'-]+/gu)?.filter((w) => w.length > 2 && !STOP.has(w)) || [];
+  const words = (s) => {
+    const ws = s.toLowerCase().match(/\p{L}[\p{L}\p{M}'-]+/gu)?.filter((w) => w.length > 2 && !STOP.has(w) && !UNSPACED.test(w)) || [];
+    // for unspaced scripts, pairs of characters stand in for words
+    for (const run of s.match(new RegExp(`${UNSPACED.source}+`, 'gu')) || []) for (let i = 0; i < run.length - 1; i++) ws.push(run.slice(i, i + 2));
+    return ws;
+  };
   const tf = new Map();
   for (const x of sentences) for (const w of words(x.s)) tf.set(w, (tf.get(w) || 0) + 1);
   const top = Math.max(1, ...tf.values());

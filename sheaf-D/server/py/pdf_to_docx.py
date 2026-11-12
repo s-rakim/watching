@@ -120,7 +120,7 @@ def stem_width(diff, box):
     return float(runs[len(runs) // 2]), len(runs)
 
 
-def read_page(doc, bare_doc, index, fonts):
+def read_page(doc, bare_doc, index, fonts, pieces=False):
     page = doc[index]
     w, h = page.rect.width, page.rect.height
     s = SAMPLE_SCALE
@@ -195,7 +195,10 @@ def read_page(doc, bare_doc, index, fonts):
                 inked = region.size and region.max() >= 40
                 if not inked and "".join(c["c"] for c in text_chars).strip():
                     continue  # leaves no mark: an OCR layer or hidden text, already in the picture
-                if inked and len(info["stems"]) < 40:
+                # Ideographs have strokes of every width, so they say nothing about boldness
+                text = "".join(c["c"] for c in text_chars)
+                ideo = len(re.findall("[\u2e80-\u9fff\uac00-\ud7af\uf900-\ufaff]", text))
+                if inked and len(info["stems"]) < 40 and ideo * 2 < len(text):
                     stem, n = stem_width(diff, box)
                     if n:
                         info["stems"].append(stem / (size * s))
@@ -207,6 +210,8 @@ def read_page(doc, bare_doc, index, fonts):
                                   "size": size, "font": span["font"], "color": color, "link": link})
 
     decide_weights(font_info)
+    if pieces:
+        return {"w": w, "h": h, "chars": chars, "fonts": font_info, "bare": bare_img, "scale": s}
     frames = to_frames(chars, font_info)
     background = background_png(bare_img, w)
     return {"w": w, "h": h, "background": background, "frames": frames}
@@ -457,7 +462,14 @@ def main() -> None:
     mode = sys.argv[3] if len(sys.argv) > 3 else "layout"
     logging.disable(logging.CRITICAL)
     pymupdf.TOOLS.mupdf_display_errors(False)
-    (flow if mode == "flow" else layout)(src, dst)
+    if mode == "elements":
+        from pdf_elements import elements
+        elements(src, dst, read_page, Fonts)
+    elif mode == "regions":
+        from pdf_elements import regions
+        regions(src, dst, sys.argv[4])
+    else:
+        (flow if mode == "flow" else layout)(src, dst)
 
 
 if __name__ == "__main__":
