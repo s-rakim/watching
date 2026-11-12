@@ -144,7 +144,7 @@ Every tool that needs an outside program will tell you when that program is miss
 | OCRmyPDF and Tesseract | OCR, PDF to PDF/A |
 | Poppler (`pdftoppm`, `pdfimages`) | PDF to JPG |
 | Chromium or Chrome | HTML to PDF |
-| Python 3 with `pdf2docx`, `pdfplumber`, `openpyxl`, `Pillow` | PDF to Word, PDF to Excel, JPG to PDF, Scan to PDF, Summarize |
+| Python 3 with `pdf2docx` (which brings PyMuPDF and NumPy), `pdfplumber`, `openpyxl`, `Pillow` | PDF to Word, PDF to Excel, JPG to PDF, Scan to PDF, Summarize |
 | `deepl` (pip) and a `DEEPL_AUTH_KEY` environment variable | Translate with DeepL |
 | `argostranslate` (optional, pip) | Translate offline. Run `python3 server/py/install_argos.py es fr` for the languages you want |
 

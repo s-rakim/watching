@@ -113,8 +113,9 @@ export const TOOLS = [
   },
   {
     id: 'pdf-to-word', title: 'PDF to Word', cat: 'convert', icon: 'fileWord', hue: 'amber',
-    desc: 'Get an editable DOCX with the headings, paragraphs and lists from your PDF.',
+    desc: 'Get an editable DOCX that looks like your PDF, with its fonts, colours, tables and pictures.',
     mode: 'files', accept: PDF, multiple: true, action: 'Convert to Word', busy: 'Building your document…',
+    fields: [{ key: 'layout', label: 'Layout', type: 'segmented', default: 'layout', options: [['layout', 'Same layout'], ['flow', 'Flowing text']] }],
   },
   {
     id: 'pdf-to-excel', title: 'PDF to Excel', cat: 'convert', icon: 'table', hue: 'amber',

@@ -361,7 +361,10 @@ export function linesToBlocks(pages) {
   const blocks = [];
   for (const lines of pages) {
     let para = [];
-    const flush = () => { if (para.length) { blocks.push({ t: 'p', text: para.join(' ').replace(/(\w)- (\w)/g, '$1$2') }); para = []; } };
+    // A word broken across two lines ("infor-" / "mation") is joined back up. Only at a line
+    // end, and only before a lowercase letter, so "D- 32/46" or "A- grade" are left alone.
+    const join = (ls) => ls.reduce((t, l) => (/[a-z]-$/i.test(t) && /^[a-z]/.test(l) ? t.slice(0, -1) + l : t ? `${t} ${l}` : l), '');
+    const flush = () => { if (para.length) { blocks.push({ t: 'p', text: join(para) }); para = []; } };
     lines.forEach((l, i) => {
       const prev = lines[i - 1];
       const gap = prev ? prev.y - l.y : 0;

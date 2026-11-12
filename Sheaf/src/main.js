@@ -202,7 +202,7 @@ function renderFields() {
     crop: 'Drag the corners of the frame to choose what to keep.',
     compare: 'Removed words are marked on the left, added words on the right.',
     ocr: 'Pages are read at 300 dpi on this device. A big scan can take a minute or two.',
-    'pdf-to-word': 'Text, headings and lists come across as editable Word text. Images and exact positions are not kept.',
+    'pdf-to-word': 'Same layout keeps every line where it was, in its own font and colour, with the boxes, lines and pictures behind it. Flowing text gives plain paragraphs, headings and lists.',
     'pdf-to-excel': 'Works best on PDFs made from spreadsheets or reports. Numbers become real numbers you can add up.',
     'pdf-to-powerpoint': 'Each page becomes one slide, shown as a picture of the page.',
     summarize: 'Summarizer' in self ? 'Your browser has an on-device model, so the summary is written fresh.' : 'Key sentences are picked from the text. Scanned PDFs need OCR first.',
@@ -608,7 +608,7 @@ async function execute(tool, files, opts, progress) {
     }
     case 'pdf-to-jpg': return { outputs: await each((f, p) => ops.pdfToImages(f, opts, p)) };
     case 'pdf-to-markdown': return { outputs: await each((f) => ops.pdfToMarkdown(f, opts)) };
-    case 'pdf-to-word': return { outputs: await each((f) => conv.pdfToWord(f)) };
+    case 'pdf-to-word': return { outputs: await each((f, p) => conv.pdfToWord(f, opts, p)) };
     case 'pdf-to-excel': return { outputs: await each((f) => conv.pdfToExcel(f, opts)) };
     case 'pdf-to-powerpoint': return { outputs: await each((f, p) => conv.pdfToPowerpoint(f, opts, p)) };
     case 'ocr': {
