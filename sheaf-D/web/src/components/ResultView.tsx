@@ -1,4 +1,4 @@
-import { ArrowRight, Check, Download, RotateCcw, Share } from 'lucide-react';
+import { ArrowRight, Check, Download, FilePen, RotateCcw, Share } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Result, saveBlob } from '../lib/api';
@@ -80,6 +80,18 @@ export default function ResultView({ tool, result, onAgain }: Props) {
           >
             <Share size={18} strokeWidth={2.2} />
             {isIOS ? 'Save to Files or share' : 'Share'}
+          </button>
+        )}
+        {result.count === 1 && extOf(result.name) === 'docx' && (
+          <button
+            className="btn btn-secondary"
+            onClick={() => {
+              passFiles('edit-word', [new File([result.blob], result.name, { type: result.blob.type })]);
+              navigate('/edit-word');
+            }}
+          >
+            <FilePen size={18} strokeWidth={2.2} />
+            Edit it here
           </button>
         )}
         <button className="btn btn-secondary" onClick={onAgain}>

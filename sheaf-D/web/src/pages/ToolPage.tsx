@@ -28,6 +28,7 @@ const PagesWorkspace = lazy(() => import('../workspaces/PagesWorkspace'));
 const EditorWorkspace = lazy(() => import('../workspaces/EditorWorkspace'));
 const CropWorkspace = lazy(() => import('../workspaces/CropWorkspace'));
 const CompareWorkspace = lazy(() => import('../workspaces/CompareWorkspace'));
+const WordWorkspace = lazy(() => import('../workspaces/WordWorkspace'));
 
 export interface Item {
   id: string;
@@ -248,7 +249,9 @@ function ToolRunner({ tool }: { tool: ToolDef }) {
           ? CropWorkspace
           : tool.workspace === 'compare'
             ? CompareWorkspace
-            : null;
+            : tool.workspace === 'word'
+              ? WordWorkspace
+              : null;
   const inWorkspace = !!Workspace && items.length >= (tool.minFiles ?? 1);
 
   const family = CATEGORIES.find((c) => c.id === tool.category)!;

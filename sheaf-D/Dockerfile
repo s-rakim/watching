@@ -2,6 +2,22 @@
 # Builds for linux/amd64 and linux/arm64 (Apple Silicon, Raspberry Pi 4/5 on a 64-bit
 # OS, Ampere and Graviton servers). See "Other CPUs" in the README.
 
+# The Word editor: WordCraft (github.com/storytold/wordcraft, MIT OR Apache-2.0) compiled to
+# WebAssembly. Keep WORDCRAFT_REV in step with Sheaf/public/wordcraft/REVISION. The output is
+# the same on every CPU, so this runs on the build machine's own architecture too. It is the
+# slowest stage by far (15 to 25 minutes the first time); Docker caches it after that.
+FROM --platform=$BUILDPLATFORM rust:1-bookworm AS wordcraft
+ARG WORDCRAFT_REV=07f977372d3767e4abf7f3b0cc77c351289013f2
+RUN rustup target add wasm32-unknown-unknown \
+ && cargo install trunk --version 0.22.1 --locked
+RUN git clone https://github.com/storytold/wordcraft /src \
+ && git -C /src checkout "$WORDCRAFT_REV"
+WORKDIR /src/apps/wordcraft-web
+RUN trunk build --release \
+ && cp /src/LICENSE-MIT /src/LICENSE-APACHE /src/NOTICE /src/dist/web/ \
+ && echo "$WORDCRAFT_REV" > /src/dist/web/REVISION \
+ && rm -f /src/dist/web/.trunk-lock
+
 # Build the web app. Its output is plain HTML, CSS and JS, the same on every CPU, so this
 # stage always runs on the build machine's own architecture, even when cross-building.
 FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS web
@@ -12,6 +28,7 @@ COPY server/package.json server/
 RUN npm ci --workspace web --include-workspace-root
 COPY design design
 COPY web web
+COPY --from=wordcraft /src/dist/web web/public/wordcraft
 RUN npm run build --workspace web
 
 # Runtime: the server plus every tool it shells out to. Every package below exists for

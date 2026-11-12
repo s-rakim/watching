@@ -6,3 +6,4 @@ dist
 server/tmp
 __pycache__
 *.pyc
+web/public/wordcraft

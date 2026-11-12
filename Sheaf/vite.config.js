@@ -17,9 +17,10 @@ function serviceWorker() {
     enforce: 'post',
     generateBundle(_, bundle) {
       const built = Object.keys(bundle).filter((f) => !f.endsWith('.map') && f !== 'index.html');
-      // OCR engines and language data are tens of MB. They are stored the first time OCR
-      // runs instead, so installing the app doesn't download them all up front.
-      const pub = existsSync('public') ? publicFiles('public').filter((f) => !f.startsWith('ocr/')) : [];
+      // OCR engines and language data are tens of MB, and so is the Word editor. They are
+      // stored the first time they are used instead, so installing the app doesn't download
+      // them all up front.
+      const pub = existsSync('public') ? publicFiles('public').filter((f) => !f.startsWith('ocr/') && !f.startsWith('wordcraft/')) : [];
       const files = ['./', ...built, ...pub].sort();
       const hash = createHash('sha256');
       for (const f of built) {
