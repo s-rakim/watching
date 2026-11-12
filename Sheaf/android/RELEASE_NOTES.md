@@ -8,6 +8,10 @@ Sheaf as an Android app. It's the same set of PDF tools as the web version, pack
 
 Needs Android 7.0 or newer.
 
+**Updates**
+
+After this install, changes to Sheaf arrive by themselves: the app downloads them in the background and asks you to restart. Only changes to the Android side need a new APK, and the app tells you when that happens.
+
 **Saving results**
 
 Tap **Save** to put the file in `Documents/Sheaf`, or **Share** to send it to Drive, Files, mail or a chat app.

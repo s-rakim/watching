@@ -36,7 +36,7 @@ function shell(inner) {
 }
 
 function toast(msg, kind = 'error') {
-  document.querySelector('.toast')?.remove();
+  document.querySelector('.toast:not(.update)')?.remove();
   const el = h(`<div class="toast ${kind}" role="alert">${esc(msg)}</div>`);
   document.body.append(el);
   setTimeout(() => el.remove(), 6000);
@@ -763,3 +763,17 @@ window.addEventListener('drop', (e) => {
 // Exposed so the canvas editor can re-check the loaded document.
 export { loadPdf };
 route();
+
+// In the Android app, pick up new builds published from main (see lib/liveupdate.js). Loaded
+// only there, so the web version never downloads this code.
+if (isNativeApp) {
+  import('./lib/liveupdate.js').then(({ startLiveUpdates }) => startLiveUpdates({
+    isIdle: () => !session,
+    notify(text, label, action) {
+      document.querySelector('.toast.update')?.remove();
+      const el = h(`<div class="toast info update" role="status"><span>${esc(text)}</span><button type="button" class="btn btn-cta">${esc(label)}</button></div>`);
+      el.querySelector('button').onclick = () => { el.remove(); action(); };
+      document.body.append(el);
+    },
+  })).catch((err) => console.warn('Live updates are off:', err));
+}

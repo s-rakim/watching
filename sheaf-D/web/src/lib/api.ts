@@ -1,5 +1,7 @@
 export interface Health {
   ok: boolean;
+  /** Changes whenever the server is running a different build of the web app. */
+  build?: string;
   qpdf: boolean;
   ghostscript: boolean;
   libreoffice: boolean;

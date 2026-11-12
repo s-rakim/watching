@@ -35,6 +35,12 @@ if ('serviceWorker' in navigator && import.meta.env.PROD && !isNativeApp) {
   addEventListener('load', async () => {
     try {
       const reg = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`);
+      // Browsers only look for a new sw.js when a page loads. An installed app can stay open
+      // for days, so look again every hour and whenever it comes back to the foreground.
+      const check = () => { if (navigator.onLine) reg.update().catch(() => {}); };
+      setInterval(check, 60 * 60 * 1000);
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+      if (reg.waiting && navigator.serviceWorker.controller) offerUpdate(reg.waiting);
       reg.addEventListener('updatefound', () => {
         const next = reg.installing;
         next?.addEventListener('statechange', () => {
@@ -48,8 +54,9 @@ if ('serviceWorker' in navigator && import.meta.env.PROD && !isNativeApp) {
     }
   });
   function offerUpdate(worker) {
+    if (document.querySelector('.toast.update')) return;
     const el = document.createElement('div');
-    el.className = 'toast info';
+    el.className = 'toast info update';
     el.setAttribute('role', 'status');
     el.innerHTML = '<span>A new version of Sheaf is ready.</span><button type="button" class="btn btn-cta">Reload</button>';
     el.querySelector('button').onclick = () => { reloading = true; worker.postMessage('skip-waiting'); };

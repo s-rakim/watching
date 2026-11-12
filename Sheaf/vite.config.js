@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 import { defineConfig, loadEnv } from 'vite';
 
 /**
@@ -32,6 +32,34 @@ function serviceWorker() {
         .replace('__VERSION__', hash.digest('hex').slice(0, 12))
         .replace('__PRECACHE__', JSON.stringify(files));
       this.emitFile({ type: 'asset', fileName: 'sw.js', source });
+    },
+  };
+}
+
+/**
+ * Writes dist/sheaf-files.json: every built file with its SHA-256 and size, plus a version
+ * made from all of them. The Android app compares this with the live-update feed to see
+ * which files changed (src/lib/liveupdate.js, scripts/live-feed.mjs).
+ */
+function fileList() {
+  let outDir;
+  const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((d) =>
+    d.isDirectory() ? walk(join(dir, d.name)) : [join(dir, d.name)]);
+  return {
+    name: 'sheaf-file-list',
+    apply: 'build',
+    configResolved(config) { outDir = resolve(config.root, config.build.outDir); },
+    closeBundle() {
+      const files = {};
+      for (const full of walk(outDir).sort()) {
+        const path = relative(outDir, full).split('\\').join('/');
+        if (path === 'sheaf-files.json' || path.endsWith('.map')) continue;
+        const data = readFileSync(full);
+        files[path] = [createHash('sha256').update(data).digest('hex'), data.length];
+      }
+      const all = createHash('sha256');
+      for (const [path, [hash]] of Object.entries(files)) all.update(`${path}\0${hash}\n`);
+      writeFileSync(join(outDir, 'sheaf-files.json'), JSON.stringify({ version: all.digest('hex').slice(0, 12), files }));
     },
   };
 }
@@ -76,7 +104,7 @@ function deeplRelay(key) {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   return {
-    plugins: [serviceWorker(), deeplRelay(env.DEEPL_AUTH_KEY)],
+    plugins: [serviceWorker(), fileList(), deeplRelay(env.DEEPL_AUTH_KEY)],
     // Vite turns away requests for host names it doesn't recognise. Tailscale
     // MagicDNS names end in .ts.net, so let those through when the site is
     // opened by name from another device on the tailnet.
