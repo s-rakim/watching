@@ -32,12 +32,20 @@ const finish = (zip, mime) => zip.generateAsync({ type: 'blob', mimeType: mime, 
  * (the shape linesToBlocks produces). Page markers become page breaks.
  */
 export async function buildDocx(blocks, { title = '' } = {}) {
-  const run = (text) => `<w:r><w:t xml:space="preserve">${x(text)}</w:t></w:r>`;
+  // Right-to-left text (Arabic, Hebrew, or a translation into them) needs bidi paragraphs.
+  const RTL = /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufefc]/;
+  const rtl = (text) => [...text].filter((c) => RTL.test(c)).length > (text.match(/[A-Za-z]/g) || []).length;
+  // A tab character inside w:t is not a tab to Word; it needs its own element.
+  const run = (text) => `<w:r>${RTL.test(text) ? '<w:rPr><w:rtl/></w:rPr>' : ''}${text.split('\t').map((t) => `<w:t xml:space="preserve">${x(t)}</w:t>`).join('<w:tab/>')}</w:r>`;
+  const para = (style, text, extra = '') => {
+    const pPr = `${style ? `<w:pStyle w:val="${style}"/>` : ''}${rtl(text) ? '<w:bidi/>' : ''}${extra}`;
+    return `<w:p>${pPr ? `<w:pPr>${pPr}</w:pPr>` : ''}${run(text)}</w:p>`;
+  };
   const body = [];
   blocks.forEach((b, i) => {
-    if (b.t === 'h') body.push(`<w:p><w:pPr><w:pStyle w:val="Heading${b.level}"/></w:pPr>${run(b.text)}</w:p>`);
-    else if (b.t === 'li') body.push(`<w:p><w:pPr><w:pStyle w:val="ListParagraph"/><w:ind w:left="720" w:hanging="360"/></w:pPr>${run(`${b.marker || '•'}\t${b.text}`)}</w:p>`);
-    else if (b.t === 'p') body.push(`<w:p>${run(b.text)}</w:p>`);
+    if (b.t === 'h') body.push(para(`Heading${b.level}`, b.text));
+    else if (b.t === 'li') body.push(para('ListParagraph', `${b.marker || '•'}\t${b.text}`, '<w:ind w:left="720" w:hanging="360"/>'));
+    else if (b.t === 'p') body.push(para('', b.text));
     else if (b.t === 'page' && blocks.slice(i + 1).some((n) => n.t !== 'page')) body.push('<w:p><w:r><w:br w:type="page"/></w:r></w:p>');
   });
   const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
@@ -61,110 +69,6 @@ ${heading(1, 36)}${heading(2, 30)}${heading(3, 26)}
 </w:styles>`);
   zip.file('word/document.xml', `${XML}<w:document ${W}><w:body>${body.join('') || '<w:p/>'}
 <w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>`);
-  return finish(zip, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-}
-
-/**
- * Word file that looks like the PDF. Each PDF page becomes its own section with the same
- * page size. Everything that isn't text sits behind the page as one picture, and every
- * piece of text is a paragraph in a frame pinned to where it was on the PDF page, in its
- * own font, size, weight and colour. The text stays normal, editable Word text.
- *
- * pages: [{ w, h, background: Uint8Array | null, frames: [{ x, base, size, w, runs }] }]
- * runs:  [{ text, font, size, bold, italic, color, link }]
- */
-export async function buildLayoutDocx(pages, { title = '' } = {}) {
-  const tw = (pt) => Math.round(pt * 20);
-  const emu = (pt) => Math.round(pt * 12700);
-  const relList = [['rId1', 'styles', 'styles.xml'], ['rId2', 'settings', 'settings.xml'], ['rId3', 'fontTable', 'fontTable.xml']];
-  const links = new Map();
-  const fontsUsed = new Map();
-  const zip = new JSZip();
-  let shapeId = 1;
-  const linkId = (url) => {
-    if (!links.has(url)) links.set(url, `rIdL${links.size + 1}`);
-    return links.get(url);
-  };
-
-  const runXml = (r, tighten) => {
-    fontsUsed.set(r.font, r.kind);
-    const f = x(r.font);
-    const sz = Math.max(2, Math.round(r.size * 2));
-    const rPr = `<w:rPr><w:rFonts w:ascii="${f}" w:hAnsi="${f}" w:cs="${f}" w:eastAsia="${f}"/>${r.bold ? '<w:b/><w:bCs/>' : ''}${r.italic ? '<w:i/><w:iCs/>' : ''}`
-      + `${r.color && r.color !== '000000' ? `<w:color w:val="${r.color}"/>` : ''}${tighten ? `<w:spacing w:val="${Math.round(tighten * 20)}"/>` : ''}<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/></w:rPr>`;
-    return `<w:r>${rPr}<w:t xml:space="preserve">${x(r.text)}</w:t></w:r>`;
-  };
-
-  const body = [];
-  pages.forEach((pg, i) => {
-    // Empty flow paragraphs hold the page picture and the section break. They are made
-    // tiny so they never push anything onto a second page.
-    const tiny = '<w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/><w:rPr><w:sz w:val="2"/></w:rPr>';
-    if (pg.background) {
-      const rid = `rIdP${i + 1}`;
-      relList.push([rid, 'image', `media/page${i + 1}.png`]);
-      zip.file(`word/media/page${i + 1}.png`, pg.background);
-      const id = shapeId++;
-      body.push(`<w:p><w:pPr>${tiny}</w:pPr><w:r><w:rPr><w:sz w:val="2"/></w:rPr><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="${id}" behindDoc="1" locked="1" layoutInCell="1" allowOverlap="1">`
-        + `<wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionH><wp:positionV relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionV>`
-        + `<wp:extent cx="${emu(pg.w)}" cy="${emu(pg.h)}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/><wp:docPr id="${id}" name="Page ${i + 1}"/>`
-        + `<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">`
-        + `<pic:pic><pic:nvPicPr><pic:cNvPr id="${id}" name="page${i + 1}.png"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>`
-        + `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${emu(pg.w)}" cy="${emu(pg.h)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>`
-        + `</a:graphicData></a:graphic></wp:anchor></w:drawing></w:r></w:p>`);
-    }
-    for (const f of pg.frames) {
-      // Exact line height; Word and LibreOffice both put the extra room above the text, so
-      // the baseline sits one descent up from the bottom of the line.
-      const line = f.size * 1.2;
-      const top = Math.max(0, f.base - line + f.size * 0.24);
-      // Room to spare on the right, in case Word swaps in a slightly wider font.
-      const width = Math.min(Math.max(f.w * 1.25 + 4, f.w + 2), Math.max(f.w + 2, pg.w - f.x));
-      const frame = `<w:framePr w:w="${tw(width)}" w:wrap="around" w:hAnchor="page" w:vAnchor="page" w:x="${tw(f.x)}" w:y="${tw(top)}"/>`;
-      const content = [];
-      for (const r of f.runs) {
-        const xml = runXml(r, f.tighten);
-        if (r.link && content.length && content.at(-1).link === r.link) content.at(-1).xml += xml;
-        else content.push({ link: r.link, xml });
-      }
-      const inner = content.map((c) => (c.link ? `<w:hyperlink r:id="${linkId(c.link)}" w:history="1">${c.xml}</w:hyperlink>` : c.xml)).join('');
-      body.push(`<w:p><w:pPr>${frame}<w:spacing w:before="0" w:after="0" w:line="${tw(line)}" w:lineRule="exact"/><w:ind w:left="0" w:right="0"/><w:jc w:val="left"/></w:pPr>${inner}</w:p>`);
-    }
-    const sect = `<w:sectPr><w:type w:val="nextPage"/><w:pgSz w:w="${tw(pg.w)}" w:h="${tw(pg.h)}"${pg.w > pg.h ? ' w:orient="landscape"' : ''}/>`
-      + `<w:pgMar w:top="360" w:right="360" w:bottom="360" w:left="360" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr>`;
-    if (i < pages.length - 1) body.push(`<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/><w:rPr><w:sz w:val="2"/></w:rPr>${sect}</w:pPr></w:p>`);
-    else body.push(`<w:p><w:pPr>${tiny}</w:pPr></w:p>${sect}`);
-  });
-
-  const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
-  const NS = `${W} xmlns:r="${REL}" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"`;
-  zip.file('[Content_Types].xml', types([['png', 'image/png']], [
-    ['/word/document.xml', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml'],
-    ['/word/styles.xml', 'application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml'],
-    ['/word/settings.xml', 'application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml'],
-    ['/word/fontTable.xml', 'application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml'],
-    ['/docProps/core.xml', 'application/vnd.openxmlformats-package.core-properties+xml'],
-  ]));
-  zip.file('_rels/.rels', rootRels('word/document.xml'));
-  zip.file('docProps/core.xml', core(title));
-  zip.file('word/_rels/document.xml.rels', `${XML}<Relationships xmlns="${PKG_REL}">${relList.map(([id, type, target]) =>
-    `<Relationship Id="${id}" Type="${REL}/${type}" Target="${target}"/>`).join('')}${[...links].map(([url, id]) =>
-    `<Relationship Id="${id}" Type="${REL}/hyperlink" Target="${x(url)}" TargetMode="External"/>`).join('')}</Relationships>`);
-  zip.file('word/styles.xml', `${XML}<w:styles ${W}>
-<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="Arial" w:cs="Arial"/><w:sz w:val="20"/><w:lang w:val="en-GB"/></w:rPr></w:rPrDefault>
-<w:pPrDefault><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
-<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:pPr><w:widowControl w:val="0"/><w:autoSpaceDE w:val="0"/><w:autoSpaceDN w:val="0"/></w:pPr></w:style>
-<w:style w:type="character" w:styleId="Hyperlink"><w:name w:val="Hyperlink"/></w:style>
-</w:styles>`);
-  // No grid snapping or compatibility spacing, so lines sit exactly where they're told to.
-  zip.file('word/settings.xml', `${XML}<w:settings ${W}><w:defaultTabStop w:val="720"/><w:characterSpacingControl w:val="doNotCompress"/><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`);
-  // The family and stand-in tell Word what to use when the font isn't installed.
-  const fallback = { sans: ['Arial', 'swiss', 'variable'], serif: ['Times New Roman', 'roman', 'variable'], mono: ['Courier New', 'modern', 'fixed'] };
-  zip.file('word/fontTable.xml', `${XML}<w:fonts ${W}>${[...fontsUsed].map(([name, kind]) => {
-    const [alt, family, pitch] = fallback[kind] || fallback.sans;
-    return `<w:font w:name="${x(name)}">${alt !== name ? `<w:altName w:val="${alt}"/>` : ''}<w:family w:val="${family}"/><w:pitch w:val="${pitch}"/></w:font>`;
-  }).join('')}</w:fonts>`);
-  zip.file('word/document.xml', `${XML}<w:document ${NS}><w:body>${body.join('')}</w:body></w:document>`);
   return finish(zip, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
 }
 

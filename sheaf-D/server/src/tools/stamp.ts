@@ -3,6 +3,7 @@ import fontkit from '@pdf-lib/fontkit';
 import {
   PDFDocument,
   PDFFont,
+  PDFImage,
   PDFPage,
   StandardFonts,
   concatTransformationMatrix,
@@ -50,6 +51,46 @@ async function pickFont(doc: PDFDocument, text: string, family: string, bold: bo
     if (!fallback) throw new UserError('That text uses characters the built-in fonts cannot draw.');
     doc.registerFontkit(fontkit);
     return doc.embedFont(await fs.readFile(fallback), { subset: true });
+  }
+}
+
+/** Can the PDF standard font draw this text as it is? */
+async function plainFont(doc: PDFDocument, texts: string[], family: string, bold: boolean): Promise<PDFFont | null> {
+  const [regular, heavy] = FAMILIES[family] ?? FAMILIES.sans;
+  const standard = await doc.embedFont(bold ? heavy : regular);
+  try {
+    for (const t of texts) standard.encodeText(t);
+    return standard;
+  } catch {
+    return null;
+  }
+}
+
+type TextPicture = { image: PDFImage; w: number; h: number };
+
+/**
+ * Text the standard fonts can't draw (Chinese, Arabic, Hindi...) drawn as pictures with
+ * fonts that have those characters, and with Arabic joined and Indic marks in place, which
+ * a PDF font alone doesn't do. Null if that isn't possible here.
+ */
+async function textPictures(job: Job, doc: PDFDocument, texts: string[], o: { size: number; color: string; bold: boolean; family: string }):
+  Promise<Map<string, TextPicture> | null> {
+  const unique = [...new Set(texts)];
+  const dir = job.out(`text-${Math.random().toString(36).slice(2, 8)}`);
+  await fs.mkdir(dir, { recursive: true });
+  const items = unique.map((text, i) => ({ text, out: `${dir}/${i}.png` }));
+  const spec = `${dir}/spec.json`;
+  await fs.writeFile(spec, JSON.stringify({ items, size: o.size, color: o.color, bold: o.bold, family: o.family }));
+  try {
+    const { stdout } = await python('text_image.py', [spec]);
+    const sizes = JSON.parse(stdout) as { w: number; h: number }[];
+    const out = new Map<string, TextPicture>();
+    for (const [i, it] of items.entries()) {
+      out.set(it.text, { image: await doc.embedPng(await fs.readFile(it.out)), w: sizes[i].w, h: sizes[i].h });
+    }
+    return out;
+  } catch {
+    return null;
   }
 }
 
@@ -138,28 +179,46 @@ export const watermark: Tool = async (job) => {
     const doc = await load(file.path);
     const pages = doc.getPages();
     const wanted = new Set(parseRanges(o.pages, pages.length));
-    const font = kind === 'text' ? await pickFont(doc, text, o.font, !!o.bold) : null;
+    const baseSize = Number(o.fontSize ?? 48);
+    let font = kind === 'text' ? await plainFont(doc, [text], o.font, !!o.bold) : null;
+    let picture: TextPicture | null = null;
+    if (kind === 'text' && !font) {
+      const pics = await textPictures(job, doc, [text], { size: baseSize, color: String(o.color ?? '#d0342c'), bold: !!o.bold, family: o.font });
+      picture = pics?.get(text) ?? null;
+      if (!picture) font = await pickFont(doc, text, o.font, !!o.bold);
+    }
     const image = stampBytes ? (stampIsPng ? await doc.embedPng(stampBytes) : await doc.embedJpg(stampBytes)) : null;
+    const t = (angle * Math.PI) / 180;
+    const turned = (w: number, h: number) => ({
+      bw: Math.abs(w * Math.cos(t)) + Math.abs(h * Math.sin(t)),
+      bh: Math.abs(w * Math.sin(t)) + Math.abs(h * Math.cos(t)),
+    });
 
     pages.forEach((page, i) => {
       if (!wanted.has(i + 1)) return;
       const view = viewSpace(page);
       const margin = Math.min(view.width, view.height) * 0.05;
+      // the size of one stamp, before tiling shrinks it
+      let w = 0, h = 0;
+      if (font) { w = font.widthOfTextAtSize(text, baseSize); h = font.heightAtSize(baseSize, { descender: false }); }
+      else if (picture) { w = picture.w; h = picture.h; }
+      else if (image) { w = view.width * (Number(o.scale ?? 30) / 100); h = (w * image.height) / image.width; }
+      // A tiled watermark gets one ninth of the page per copy, so copies never overlap.
+      let k = o.mosaic ? 0.6 : 1;
+      const { bw, bh } = turned(w * k, h * k);
+      if (o.mosaic) k *= Math.min(1, ((view.width - margin * 2) / 3) * 0.92 / bw, ((view.height - margin * 2) / 3) * 0.92 / bh);
+      else k *= Math.min(1, (view.width - margin * 2) / bw, (view.height - margin * 2) / bh);
+      const sw = w * k, sh = h * k;
+      const box = turned(sw, sh);
       for (const anchor of anchors) {
+        const { cx, cy } = place(anchor, view.width, view.height, box.bw, box.bh, margin);
+        const at = corner(cx, cy, sw, sh, angle);
         if (font) {
-          const size = Number(o.fontSize ?? 48) * (o.mosaic ? 0.6 : 1);
-          const w = font.widthOfTextAtSize(text, size);
-          const h = font.heightAtSize(size, { descender: false });
-          const { cx, cy } = place(anchor, view.width, view.height, w, h, margin);
-          const at = corner(cx, cy, w, h, angle);
-          page.drawText(text, { ...at, size, font, color: colour(o.color, '#d0342c'), opacity, rotate: degrees(angle) });
+          page.drawText(text, { ...at, size: baseSize * k, font, color: colour(o.color, '#d0342c'), opacity, rotate: degrees(angle) });
+        } else if (picture) {
+          page.drawImage(picture.image, { ...at, width: sw, height: sh, opacity, rotate: degrees(angle) });
         } else if (image) {
-          const scale = (Number(o.scale ?? 30) / 100) * (o.mosaic ? 0.6 : 1);
-          const w = view.width * scale;
-          const h = (w * image.height) / image.width;
-          const { cx, cy } = place(anchor, view.width, view.height, w, h, margin);
-          const at = corner(cx, cy, w, h, angle);
-          page.drawImage(image, { ...at, width: w, height: h, opacity, rotate: degrees(angle) });
+          page.drawImage(image, { ...at, width: sw, height: sh, opacity, rotate: degrees(angle) });
         }
       }
       view.done();
@@ -190,17 +249,21 @@ export const pageNumbers: Tool = async (job: Job) => {
     const wantedSet = new Set(wanted);
     const numbered = pages.map((_, i) => i + 1).filter((p) => wantedSet.has(p));
     const last = start + numbered.length - 1;
-    const sample = template.replaceAll('{n}', String(last)).replaceAll('{p}', String(last));
-    const font = await pickFont(doc, sample, o.font, !!o.bold);
+    const labels = numbered.map((_, idx) => template.replaceAll('{n}', String(start + idx)).replaceAll('{p}', String(last)));
+    let font = await plainFont(doc, labels, o.font, !!o.bold);
+    const pictures = font ? null : await textPictures(job, doc, labels, { size, color: String(o.color ?? '#1c1b1a'), bold: !!o.bold, family: o.font });
+    if (!font && !pictures) font = await pickFont(doc, labels[labels.length - 1] ?? '', o.font, !!o.bold);
 
     numbered.forEach((pageNo, idx) => {
       const page = pages[pageNo - 1];
-      const label = template.replaceAll('{n}', String(start + idx)).replaceAll('{p}', String(last));
+      const label = labels[idx];
       const view = viewSpace(page);
-      const w = font.widthOfTextAtSize(label, size);
-      const h = font.heightAtSize(size, { descender: false });
+      const pic = pictures?.get(label);
+      const w = pic ? pic.w : font!.widthOfTextAtSize(label, size);
+      const h = pic ? pic.h : font!.heightAtSize(size, { descender: false });
       const { cx, cy } = place(anchor, view.width, view.height, w, h, margin);
-      page.drawText(label, { x: cx - w / 2, y: cy - h / 2, size, font, color: colour(o.color, '#1c1b1a') });
+      if (pic) page.drawImage(pic.image, { x: cx - w / 2, y: cy - h / 2, width: w, height: h });
+      else page.drawText(label, { x: cx - w / 2, y: cy - h / 2, size, font: font!, color: colour(o.color, '#1c1b1a') });
       view.done();
     });
 

@@ -31,6 +31,13 @@ export const compress: Tool = async (job) => {
       `-dColorImageResolution=${level.dpi}`,
       `-dGrayImageResolution=${level.dpi}`,
       `-dMonoImageResolution=${Math.max(level.dpi, 300)}`,
+      // gs leaves pictures alone until they are 1.5 times the target, so a 200 dpi scan
+      // was never touched at 150 dpi and came out bigger after re-encoding
+      '-dColorImageDownsampleThreshold=1.1',
+      '-dGrayImageDownsampleThreshold=1.1',
+      '-dMonoImageDownsampleThreshold=1.1',
+      '-dColorImageDownsampleType=/Bicubic',
+      '-dGrayImageDownsampleType=/Bicubic',
       `-sOutputFile=${out}`,
       file.path,
     ]).catch((err) => {

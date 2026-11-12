@@ -125,9 +125,12 @@ export const TOOLS = [
   },
   {
     id: 'pdf-to-powerpoint', title: 'PDF to PowerPoint', cat: 'convert', icon: 'slides', hue: 'amber',
-    desc: 'Turn every page into a slide in a PPTX deck, ready to present or rearrange.',
+    desc: 'Turn every page into a slide in a PPTX deck, with text, boxes and pictures you can edit.',
     mode: 'files', accept: PDF, multiple: true, action: 'Convert to PowerPoint', busy: 'Building your slides…',
-    fields: [{ key: 'dpi', label: 'Slide image quality', type: 'select', default: '150', options: [['96', 'Light (96 dpi)'], ['150', 'Normal (150 dpi)'], ['220', 'Sharp (220 dpi)']] }],
+    fields: [
+      { key: 'slides', label: 'Slides', type: 'segmented', default: 'editable', options: [['editable', 'Editable'], ['pictures', 'Pictures of pages']] },
+      { key: 'dpi', label: 'Picture quality (for pictures of pages)', type: 'select', default: '150', options: [['96', 'Light (96 dpi)'], ['150', 'Normal (150 dpi)'], ['220', 'Sharp (220 dpi)']] },
+    ],
   },
   {
     id: 'edit', title: 'Edit PDF', cat: 'edit', icon: 'edit', hue: 'pink',

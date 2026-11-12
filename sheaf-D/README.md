@@ -140,11 +140,11 @@ Every tool that needs an outside program will tell you when that program is miss
 | --- | --- |
 | qpdf | Merge, Split, Remove, Extract, Organize, Rotate, Protect, Unlock, Repair |
 | Ghostscript | Compress, Repair |
-| LibreOffice | Word, PowerPoint and Excel to PDF, PDF to PowerPoint |
+| LibreOffice | Word, PowerPoint and Excel to PDF, and the fallback for PDF to Word and PowerPoint when a file can't be read piece by piece |
 | OCRmyPDF and Tesseract | OCR, PDF to PDF/A |
 | Poppler (`pdftoppm`, `pdfimages`) | PDF to JPG |
 | Chromium or Chrome | HTML to PDF |
-| Python 3 with `pdf2docx` (which brings PyMuPDF and NumPy), `pdfplumber`, `openpyxl`, `Pillow` | PDF to Word, PDF to Excel, JPG to PDF, Scan to PDF, Summarize |
+| Python 3 with `pdf2docx` (which brings PyMuPDF and NumPy), `pdfplumber`, `openpyxl`, `Pillow` | PDF to Word, PowerPoint and Excel, JPG to PDF, Scan to PDF, Summarize, and drawing watermarks and page numbers in scripts like Chinese, Arabic and Hindi (with libraqm for joined Arabic letters) |
 | `deepl` (pip) and a `DEEPL_AUTH_KEY` environment variable | Translate with DeepL |
 | `argostranslate` (optional, pip) | Translate offline. Run `python3 server/py/install_argos.py es fr` for the languages you want |
 

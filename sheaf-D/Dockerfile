@@ -38,7 +38,7 @@ RUN apt-get update \
       $(for l in $OCR_LANGS; do echo "tesseract-ocr-$(echo "$l" | tr '_' '-')"; done) \
       libreoffice-writer libreoffice-calc libreoffice-impress libreoffice-draw \
       chromium \
-      python3 python3-pip python3-pil \
+      python3 python3-pip python3-pil libraqm0 \
       fonts-liberation fonts-dejavu-core fonts-noto-core fonts-noto-cjk \
       fonts-crosextra-carlito fonts-crosextra-caladea \
       tini ca-certificates \

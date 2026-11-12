@@ -100,7 +100,7 @@ You need Node 20 or newer and, for the full tool set, the programs below. Each t
 | --- | --- |
 | qpdf | Merge, Split, Remove, Extract, Organize, Rotate, Protect, Unlock, Repair |
 | Ghostscript | Compress, Repair |
-| LibreOffice | Word, PowerPoint and Excel to PDF, PDF to PowerPoint |
+| LibreOffice | Word, PowerPoint and Excel to PDF, and the fallback for PDF to Word and PowerPoint when a file can't be read piece by piece |
 | OCRmyPDF and Tesseract | OCR, PDF to PDF/A |
 | Poppler (`pdftoppm`, `pdfimages`) | PDF to JPG |
 | Chromium or Chrome | HTML to PDF |
@@ -391,7 +391,7 @@ For problems reaching the app over Tailscale (timeouts, "Blocked request", Magic
 
 **A PDF won't open.** Try Repair PDF. If a PDF needs a password, Sheaf asks for it when you add the file. Sheaf-D's Unlock needs the password too.
 
-**The result looks different from the original.** PDF to Word and Excel rebuild the content from the text, so exact layout isn't kept. PDF to PowerPoint puts a picture of each page on a slide. For a translation that keeps the layout, use Sheaf-D with DeepL and Save as PDF.
+**The result looks different from the original.** PDF to Word and PowerPoint rebuild the page from its text, tables, boxes and pictures, so it stays close, but a missing font is swapped for a similar one and lines can wrap differently. Charts come across as pictures. PDF to Excel keeps the text and tables, not the look. For a translation that keeps the layout, use Sheaf-D with DeepL and Save as PDF.
 
 ### Still stuck
 
