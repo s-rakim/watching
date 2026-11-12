@@ -1,11 +1,12 @@
 import {
-  PDFDocument, PDFName, PDFNumber, PDFRawStream, PDFArray, PDFDict,
+  PDFDocument, PDFName, PDFNumber, PDFRawStream, PDFArray, PDFDict, PDFRef,
   StandardFonts, degrees, rgb, PageSizes, LineCapStyle, BlendMode,
 } from '@cantoo/pdf-lib';
 import {
-  loadPdf, openForRender, closePdf, renderPage, canvasToBlob, blobBytes, baseName,
+  loadPdf, openForRender, closePdf, renderPage, canvasToBlob, blobBytes, baseName, pdfjs,
 } from './pdf.js';
 import { makeCanvas, encodeCanvas, fitArea, releaseCanvas } from './device.js';
+import { cleanText, readingOrder, gapBetween } from './textorder.js';
 
 export const out = (name, bytes, type = 'application/pdf') => ({ name, blob: new Blob([bytes], { type }) });
 
@@ -99,13 +100,17 @@ const LEVELS = {
   extreme: { maxDim: 1000, quality: 0.5 },
 };
 
-async function recompressJpeg(bytes, { maxDim, quality }) {
+async function recompressJpeg(bytes, cfg) {
   let bmp;
   try {
     bmp = await createImageBitmap(new Blob([bytes], { type: 'image/jpeg' }));
   } catch {
     return null;
   }
+  return recompressBitmap(bmp, cfg);
+}
+
+async function recompressBitmap(bmp, { maxDim, quality }) {
   const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
   const w = Math.max(1, Math.round(bmp.width * scale));
   const h = Math.max(1, Math.round(bmp.height * scale));
@@ -118,43 +123,108 @@ async function recompressJpeg(bytes, { maxDim, quality }) {
   return { bytes: await blobBytes(blob), w, h };
 }
 
-function isRgbOrGray(dict, context) {
+function channels(dict, context) {
   let cs = dict.get(PDFName.of('ColorSpace'));
-  if (!cs) return false;
+  if (!cs) return 0;
   cs = context.lookup(cs);
-  if (cs instanceof PDFName) return cs === PDFName.of('DeviceRGB') || cs === PDFName.of('DeviceGray');
+  if (cs === PDFName.of('DeviceRGB')) return 3;
+  if (cs === PDFName.of('DeviceGray')) return 1;
+  if (cs === PDFName.of('DeviceCMYK')) return 4;
   if (cs instanceof PDFArray && cs.get(0) === PDFName.of('ICCBased')) {
-    const icc = context.lookup(cs.get(1));
-    const n = icc?.dict?.get(PDFName.of('N'));
-    return n && (n.asNumber() === 3 || n.asNumber() === 1);
+    const n = context.lookup(cs.get(1))?.dict?.get(PDFName.of('N'));
+    return n ? n.asNumber() : 0;
   }
-  return false;
+  return 0;
+}
+
+const filterOf = (d) => {
+  const f = d.get(PDFName.of('Filter'));
+  if (f instanceof PDFArray) return f.size() === 1 ? f.get(0) : null;
+  return f;
+};
+
+async function inflate(bytes) {
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+/** Undo PNG row filters (Predictor 10 to 15). */
+function unpredict(data, w, bpp) {
+  const row = w * bpp, out = new Uint8Array(row * Math.floor(data.length / (row + 1)));
+  for (let y = 0, i = 0; i < data.length && y * row < out.length; y++) {
+    const type = data[i++], o = y * row;
+    for (let x = 0; x < row; x++, i++) {
+      const a = x >= bpp ? out[o + x - bpp] : 0, b = y ? out[o - row + x] : 0, c = y && x >= bpp ? out[o - row + x - bpp] : 0;
+      let v = data[i];
+      if (type === 1) v += a; else if (type === 2) v += b; else if (type === 3) v += (a + b) >> 1;
+      else if (type === 4) { const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c); v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c; }
+      out[o + x] = v;
+    }
+  }
+  return out;
+}
+
+/** A Flate image (what PNGs and screenshots become) as a bitmap, or null if it is not plain 8-bit RGB or grey. */
+async function flateBitmap(stream, ctx, n) {
+  const d = stream.dict;
+  const w = d.get(PDFName.of('Width'))?.asNumber(), h = d.get(PDFName.of('Height'))?.asNumber();
+  if (!w || !h || d.get(PDFName.of('BitsPerComponent'))?.asNumber() !== 8) return null;
+  let px = filterOf(d) ? await inflate(stream.contents) : stream.contents;
+  const parms = ctx.lookup(d.get(PDFName.of('DecodeParms')));
+  const predictor = parms instanceof PDFDict ? parms.get(PDFName.of('Predictor'))?.asNumber() || 1 : 1;
+  if (predictor >= 10) px = unpredict(px, w, n);
+  else if (predictor !== 1) return null;
+  if (px.length < w * h * n) return null;
+  const rgba = new Uint8ClampedArray(w * h * 4);
+  for (let i = 0, j = 0; i < w * h; i++, j += n) {
+    rgba[i * 4] = px[j]; rgba[i * 4 + 1] = px[j + (n === 3 ? 1 : 0)]; rgba[i * 4 + 2] = px[j + (n === 3 ? 2 : 0)]; rgba[i * 4 + 3] = 255;
+  }
+  return createImageBitmap(new ImageData(rgba, w, h));
 }
 
 export async function compress(file, level, onProgress) {
   const cfg = LEVELS[level] || LEVELS.recommended;
   const doc = await loadPdf(file.bytes, { password: file.password });
   const ctx = doc.context;
-  const images = ctx.enumerateIndirectObjects().filter(([, obj]) => {
-    if (!(obj instanceof PDFRawStream)) return false;
+  // Soft masks are transparency, not pictures, and must stay lossless.
+  const masks = new Set();
+  for (const [, obj] of ctx.enumerateIndirectObjects()) {
+    const sm = obj?.dict?.get?.(PDFName.of('SMask'));
+    if (sm instanceof PDFRef) masks.add(sm.tag);
+  }
+  const images = ctx.enumerateIndirectObjects().filter(([ref, obj]) => {
+    if (!(obj instanceof PDFRawStream) || masks.has(ref.tag)) return false;
     const d = obj.dict;
-    if (d.get(PDFName.of('Subtype')) !== PDFName.of('Image')) return false;
-    const filter = d.get(PDFName.of('Filter'));
-    const isDct = filter === PDFName.of('DCTDecode') ||
-      (filter instanceof PDFArray && filter.size() === 1 && filter.get(0) === PDFName.of('DCTDecode'));
-    return isDct && isRgbOrGray(d, ctx) && !d.get(PDFName.of('Decode'));
+    if (d.get(PDFName.of('Subtype')) !== PDFName.of('Image') || d.get(PDFName.of('ImageMask'))) return false;
+    const n = channels(d, ctx), f = filterOf(d);
+    const decode = d.get(PDFName.of('Decode'));
+    // Photoshop-style CMYK JPEGs are stored inverted with a [1 0 1 0 ...] Decode array; the
+    // browser's JPEG decoder already undoes that. Any other Decode array is left alone.
+    if (decode) return f === PDFName.of('DCTDecode') && n === 4 && decode.toString().replace(/\s+/g, ' ') === '[ 1 0 1 0 1 0 1 0 ]';
+    if (f === PDFName.of('DCTDecode')) return n === 1 || n === 3 || n === 4;
+    // Lossless pictures are only turned into JPEG at the stronger levels, and only big ones.
+    const big = (d.get(PDFName.of('Width'))?.asNumber() || 0) * (d.get(PDFName.of('Height'))?.asNumber() || 0) >= 90000;
+    return (f === PDFName.of('FlateDecode') || !f) && level !== 'low' && big && (n === 1 || n === 3);
   });
   let done = 0;
   for (const [ref, stream] of images) {
-    const res = await recompressJpeg(stream.contents, cfg);
-    if (res && res.bytes.length < stream.contents.length * 0.9) {
-      const d = stream.dict.clone(ctx);
+    const d0 = stream.dict;
+    const flate = filterOf(d0) !== PDFName.of('DCTDecode');
+    let res = null;
+    try {
+      const bmp = flate ? await flateBitmap(stream, ctx, channels(d0, ctx)) : null;
+      res = flate ? (bmp && await recompressBitmap(bmp, cfg)) : await recompressJpeg(stream.contents, cfg);
+    } catch { res = null; }
+    // A lossless picture only becomes a JPEG when that saves at least half.
+    if (res && res.bytes.length < stream.contents.length * (flate ? 0.5 : 0.9)) {
+      const d = d0.clone(ctx);
       d.set(PDFName.of('Width'), PDFNumber.of(res.w));
       d.set(PDFName.of('Height'), PDFNumber.of(res.h));
       d.set(PDFName.of('ColorSpace'), PDFName.of('DeviceRGB'));
       d.set(PDFName.of('BitsPerComponent'), PDFNumber.of(8));
       d.set(PDFName.of('Filter'), PDFName.of('DCTDecode'));
       d.delete(PDFName.of('DecodeParms'));
+      d.delete(PDFName.of('Decode'));
       d.set(PDFName.of('Length'), PDFNumber.of(res.bytes.length));
       ctx.assign(ref, PDFRawStream.of(d, res.bytes));
     }
@@ -169,25 +239,115 @@ export async function compress(file, level, onProgress) {
   };
 }
 
+/* ---------- Drawing on the page as it is shown ----------
+ * Pages can carry a /Rotate entry and a crop box that starts away from 0,0. Readers show the
+ * crop box turned by /Rotate, so stamps and numbers are placed in that frame and mapped back
+ * into the page's own coordinates here.
+ */
+function viewSize(page) {
+  const { width, height } = page.getCropBox();
+  const rot = ((page.getRotation().angle % 360) + 360) % 360;
+  return { vw: rot % 180 ? height : width, vh: rot % 180 ? width : height, rot };
+}
+
+/** A point given from the bottom-left corner of the page as shown, in page coordinates. */
+function viewPoint(page, vx, vy) {
+  const { vw, vh } = viewSize(page);
+  const r = toPdfRect(page, { x: vx / vw, y: (vh - vy) / vh, w: 0, h: 0 });
+  return { x: r.x, y: r.y };
+}
+
+const charsets = new WeakMap();
+/** Can this standard font draw every character? Helvetica and Times only cover Latin-1. */
+function canEncode(font, text) {
+  if (!charsets.has(font)) charsets.set(font, new Set(font.getCharacterSet()));
+  const set = charsets.get(font);
+  return [...text].every((ch) => ch === '\n' || set.has(ch.codePointAt(0)));
+}
+
+const CSS_FONTS = {
+  sans: 'Helvetica, Arial, "Noto Sans", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif',
+  serif: '"Times New Roman", Times, "Noto Serif", "Noto Serif CJK SC", serif',
+  mono: '"Courier New", Courier, "Noto Sans Mono", monospace',
+};
+const cssFont = (family, bold, px) => `${bold ? 'bold ' : ''}${px}px ${CSS_FONTS[family] || CSS_FONTS.sans}`;
+
+function measureCss(text, size, family, bold) {
+  const ctx = makeCanvas(1, 1).getContext('2d');
+  ctx.font = cssFont(family, bold, 100);
+  return (ctx.measureText(text).width / 100) * size;
+}
+
+/**
+ * Text the standard fonts can't draw (Cyrillic, Greek, Arabic, Chinese, Hindi...) is drawn
+ * by the browser, which has the fonts and does the shaping and right-to-left ordering, and
+ * goes into the PDF as a picture. It looks right but can't be selected as text.
+ */
+const pictures = new WeakMap();
+async function textPicture(doc, text, opts) {
+  if (!pictures.has(doc)) pictures.set(doc, new Map());
+  const cache = pictures.get(doc), key = JSON.stringify([text, opts]);
+  if (!cache.has(key)) cache.set(key, drawTextPicture(doc, text, opts));
+  return cache.get(key);
+}
+
+async function drawTextPicture(doc, text, { size, family, bold, color }) {
+  const k = Math.min(6, Math.max(2, 240 / size));
+  const width = measureCss(text, size, family, bold);
+  const w = Math.ceil(width * k) + 4, h = Math.ceil(size * 1.3 * k);
+  const fit = fitArea(w, h);
+  const canvas = makeCanvas(Math.max(1, Math.floor(w * fit)), Math.max(1, Math.floor(h * fit)));
+  const ctx = canvas.getContext('2d');
+  ctx.scale(fit, fit);
+  ctx.font = cssFont(family, bold, size * k);
+  ctx.fillStyle = color;
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(text, 2, size * k);
+  const png = await blobBytes(await encodeCanvas(canvas, 'image/png'));
+  releaseCanvas(canvas);
+  return { img: await doc.embedPng(png), w: w / k, h: h / k, descent: size * 0.3 };
+}
+
+/**
+ * Draws one line of text with its baseline starting at (x, y) in the page as shown, turned
+ * `angle` degrees anticlockwise from upright.
+ */
+async function drawViewText(doc, page, text, { x, y, size, font, family = 'sans', bold = false, color = '#000000', opacity = 1, angle = 0 }) {
+  const { rot } = viewSize(page);
+  const rotate = degrees(rot + angle);
+  if (canEncode(font, text)) {
+    page.drawText(text, { ...viewPoint(page, x, y), size, font, color: hexToRgb(color), opacity, rotate });
+    return;
+  }
+  const pic = await textPicture(doc, text, { size, family, bold, color });
+  const t = (angle * Math.PI) / 180;
+  const at = viewPoint(page, x + Math.sin(t) * pic.descent - Math.cos(t) * 2 / (240 / size), y - Math.cos(t) * pic.descent);
+  page.drawImage(pic.img, { ...at, width: pic.w, height: pic.h, opacity, rotate });
+}
+
+const textWidth = (font, text, size, family, bold) => (canEncode(font, text) ? font.widthOfTextAtSize(text, size) : measureCss(text, size, family, bold));
+
 /* ---------- Page numbers ---------- */
 export async function addPageNumbers(file, o) {
   const doc = await loadPdf(file.bytes, { password: file.password });
-  const font = await doc.embedFont(o.font === 'serif' ? StandardFonts.TimesRoman : StandardFonts.Helvetica);
+  const family = o.font === 'serif' ? 'serif' : 'sans';
+  const font = await doc.embedFont(family === 'serif' ? StandardFonts.TimesRoman : StandardFonts.Helvetica);
   const pages = doc.getPages();
-  const total = pages.length;
+  const numbered = pages.length - (o.skipFirst ? 1 : 0);
   const size = Number(o.size) || 11;
   const margin = Number(o.margin) || 28;
-  pages.forEach((page, i) => {
-    if (o.skipFirst && i === 0) return;
-    const n = i + Number(o.start || 1) - (o.skipFirst ? 1 : 0);
-    const label = String(o.format || '{n}').replace('{n}', n).replace('{total}', total);
-    const { width, height } = page.getSize();
-    const tw = font.widthOfTextAtSize(label, size);
+  for (const [i, page] of pages.entries()) {
+    if (o.skipFirst && i === 0) continue;
+    const n = i + Number(o.start ?? 1) - (o.skipFirst ? 1 : 0);
+    const total = numbered + Number(o.start ?? 1) - 1;
+    const label = String(o.format || '{n}').replaceAll('{n}', n).replaceAll('{total}', total);
+    const { vw, vh } = viewSize(page);
+    const tw = textWidth(font, label, size, family, false);
     const [v, h] = (o.position || 'bottom-center').split('-');
-    const x = h === 'left' ? margin : h === 'right' ? width - margin - tw : (width - tw) / 2;
-    const y = v === 'top' ? height - margin - size : margin;
-    page.drawText(label, { x, y, size, font, color: hexToRgb(o.color || '#000000') });
-  });
+    const x = h === 'left' ? margin : h === 'right' ? vw - margin - tw : (vw - tw) / 2;
+    const y = v === 'top' ? vh - margin - size : margin;
+    await drawViewText(doc, page, label, { x, y, size, font, family, color: o.color || '#000000' });
+  }
   return [out(`${baseName(file.name)}-numbered.pdf`, await doc.save())];
 }
 
@@ -201,29 +361,31 @@ export async function watermark(file, o, imageBytes) {
   }
   const opacity = Number(o.opacity ?? 0.3);
   const angle = Number(o.angle ?? 45);
+  const tile = o.layout === 'tile';
+  const rad = (angle * Math.PI) / 180;
+  const text = o.text || 'CONFIDENTIAL';
   for (const page of doc.getPages()) {
-    const { width, height } = page.getSize();
-    const spots = o.layout === 'tile'
-      ? Array.from({ length: 9 }, (_, k) => [width * ((k % 3) + 0.5) / 3, height * (Math.floor(k / 3) + 0.5) / 3])
-      : [[width / 2, height / 2]];
+    const { vw, vh, rot } = viewSize(page);
+    const spots = tile
+      ? Array.from({ length: 9 }, (_, k) => [vw * ((k % 3) + 0.5) / 3, vh * (Math.floor(k / 3) + 0.5) / 3])
+      : [[vw / 2, vh / 2]];
+    // Room along the slant, so long text is made smaller instead of running off the page
+    // or, when tiled, into the next copy.
+    const room = (Math.abs(Math.cos(rad)) < 0.01 ? vh : Math.abs(Math.sin(rad)) < 0.01 ? vw : Math.min(vw / Math.abs(Math.cos(rad)), vh / Math.abs(Math.sin(rad)))) * (tile ? 0.3 : 0.9);
     for (const [cx, cy] of spots) {
-      const rad = (angle * Math.PI) / 180;
       if (img) {
-        const scale = Math.min((width * (o.layout === 'tile' ? 0.25 : 0.5)) / img.width, 1);
+        const scale = Math.min((vw * (tile ? 0.25 : 0.5)) / img.width, 1);
         const w = img.width * scale, h = img.height * scale;
-        page.drawImage(img, {
-          x: cx - (w / 2) * Math.cos(rad) + (h / 2) * Math.sin(rad),
-          y: cy - (w / 2) * Math.sin(rad) - (h / 2) * Math.cos(rad),
-          width: w, height: h, rotate: degrees(angle), opacity,
-        });
+        const at = viewPoint(page, cx - (w / 2) * Math.cos(rad) + (h / 2) * Math.sin(rad), cy - (w / 2) * Math.sin(rad) - (h / 2) * Math.cos(rad));
+        page.drawImage(img, { ...at, width: w, height: h, rotate: degrees(rot + angle), opacity });
       } else {
-        const text = o.text || 'CONFIDENTIAL';
-        const size = Number(o.size) || (o.layout === 'tile' ? 28 : 64);
-        const tw = font.widthOfTextAtSize(text, size);
-        page.drawText(text, {
+        let size = Number(o.size) || (tile ? 28 : 64);
+        let tw = textWidth(font, text, size, 'sans', true);
+        if (tw > room) { size *= room / tw; tw = room; }
+        await drawViewText(doc, page, text, {
           x: cx - (tw / 2) * Math.cos(rad) + (size / 3) * Math.sin(rad),
           y: cy - (tw / 2) * Math.sin(rad) - (size / 3) * Math.cos(rad),
-          size, font, color: hexToRgb(o.color || '#d14343'), opacity, rotate: degrees(angle),
+          size, font, family: 'sans', bold: true, color: o.color || '#d14343', opacity, angle,
         });
       }
     }
@@ -334,15 +496,16 @@ export async function extractLines(pdf) {
     }
     for (const l of lines) {
       l.runs.sort((a, b) => a.x - b.x);
-      let text = '';
-      let end = null;
-      for (const r of l.runs) {
-        if (end !== null && r.x - end > l.size * 0.2 && !text.endsWith(' ') && !r.str.startsWith(' ')) text += ' ';
-        text += r.str;
-        end = r.x + r.w;
-      }
-      l.text = text.replace(/\s+/g, ' ').trim();
       l.x = l.runs[0]?.x ?? 0;
+      l.right = Math.max(...l.runs.map((r) => r.x + r.w));
+      let text = '';
+      let prev = null;
+      for (const r of readingOrder(l.runs)) {
+        if (prev && gapBetween(prev, r) > l.size * 0.2 && !text.endsWith(' ') && !r.str.startsWith(' ')) text += ' ';
+        text += r.str;
+        prev = r;
+      }
+      l.text = cleanText(text).replace(/\s+/g, ' ').trim();
     }
     pages.push(lines.filter((l) => l.text).sort((a, b) => b.y - a.y));
   }
@@ -360,6 +523,8 @@ export function linesToBlocks(pages) {
   const body = [...freq.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 10;
   const blocks = [];
   for (const lines of pages) {
+    const bodyLines = lines.filter((l) => Math.abs(l.size - body) < body * 0.15 && l.right != null);
+    const left = Math.min(...bodyLines.map((l) => l.x)), right = Math.max(...bodyLines.map((l) => l.right));
     let para = [];
     // A word broken across two lines ("infor-" / "mation") is joined back up. Only at a line
     // end, and only before a lowercase letter, so "D- 32/46" or "A- grade" are left alone.
@@ -380,7 +545,10 @@ export function linesToBlocks(pages) {
         blocks.push({ t: 'li', marker: /^\d/.test(bullet[1]) ? bullet[1].replace(')', '.') : null, text: bullet[2] });
         return;
       }
-      if (prev && gap > l.size * 1.8) flush();
+      // A wide gap above, or a line before that stopped well short of the right margin,
+      // ends the paragraph. Without the second test, short lines such as list items whose
+      // bullets are drawn as shapes all run together into one paragraph.
+      if (prev && (gap > l.size * 1.8 || right - prev.right > Math.max(body * 8, (right - left) * 0.25))) flush();
       para.push(l.text);
     });
     flush();
@@ -447,6 +615,8 @@ function dropEncryptionLeftovers(doc) {
     const isEncryptDict = obj instanceof PDFDict && dict.has(PDFName.of('O')) && dict.has(PDFName.of('U')) && dict.has(PDFName.of('Filter'));
     if (isXref || isEncryptDict) ctx.delete(ref);
   }
+  // Keep the trailer's /Size honest after the deletions.
+  ctx.largestObjectNumber = Math.max(0, ...ctx.enumerateIndirectObjects().map(([r]) => r.objectNumber));
 }
 
 export async function unlock(file, password) {
@@ -456,32 +626,65 @@ export async function unlock(file, password) {
 }
 
 /* ---------- Repair ----------
- * First try a lenient parse and rewrite (rebuilds the xref table and drops broken objects).
- * If pdf-lib can't make sense of it, fall back to pdf.js, which is more forgiving, and
- * rebuild each page it can render as an image.
+ * A lenient parse and rewrite rebuilds the xref table and drops broken objects. That alone
+ * can leave a page pointing at objects that were cut off (a truncated download loses its
+ * fonts this way, and the text turns to boxes), so every page is checked for references
+ * that lead nowhere. Pages that are whole are copied as they are; the rest are rebuilt as
+ * images from pdf.js, which is better at drawing damaged files.
  */
+function missingRefs(doc, root) {
+  const ctx = doc.context, seen = new Set();
+  let missing = 0;
+  const walk = (obj, depth) => {
+    if (!obj || depth > 40 || missing) return;
+    if (obj instanceof PDFRef) {
+      if (seen.has(obj.tag)) return;
+      seen.add(obj.tag);
+      const target = ctx.lookup(obj);
+      if (target === undefined) { missing++; return; }
+      walk(target, depth + 1);
+    } else if (obj instanceof PDFDict) {
+      for (const [k, v] of obj.entries()) if (k !== PDFName.of('Parent') && k !== PDFName.of('P')) walk(v, depth + 1);
+    } else if (obj instanceof PDFArray) {
+      for (const v of obj.asArray()) walk(v, depth + 1);
+    } else if (obj.dict instanceof PDFDict) walk(obj.dict, depth + 1);
+  };
+  walk(root, 0);
+  return missing;
+}
+
 export async function repair(file) {
+  let src = null;
   try {
-    const src = await PDFDocument.load(file.bytes, { ignoreEncryption: true, throwOnInvalidObject: false, updateMetadata: false });
-    const doc = await PDFDocument.create();
-    const pages = await doc.copyPages(src, src.getPageIndices());
-    pages.forEach((p) => doc.addPage(p));
-    if (doc.getPageCount() > 0) return { outputs: [out(`${baseName(file.name)}-repaired.pdf`, await doc.save())], method: 'structure' };
-  } catch { /* fall through */ }
-  const pdf = await openForRender(file.bytes);
+    src = await loadPdf(file.bytes, { password: file.password, throwOnInvalidObject: false });
+  } catch { /* pdf-lib can't read it at all */ }
+  let pdf = null;
+  const raster = async (i) => {
+    pdf ||= await openForRender(file.bytes, file.password);
+    const canvas = await renderPage(pdf, i + 1, { scale: 2 });
+    const img = await doc.embedJpg(await blobBytes(await canvasToBlob(canvas, 'image/jpeg', 0.9)));
+    const w = canvas.width / canvas.pdfScale, h = canvas.height / canvas.pdfScale;
+    doc.addPage([w, h]).drawImage(img, { x: 0, y: 0, width: w, height: h });
+    releaseCanvas(canvas);
+  };
   const doc = await PDFDocument.create();
-  for (let i = 1; i <= pdf.numPages; i++) {
-    try {
-      const canvas = await renderPage(pdf, i, { scale: 2 });
-      const img = await doc.embedJpg(await blobBytes(await canvasToBlob(canvas, 'image/jpeg', 0.9)));
-      const w = canvas.width / canvas.pdfScale, h = canvas.height / canvas.pdfScale;
-      const page = doc.addPage([w, h]);
-      page.drawImage(img, { x: 0, y: 0, width: w, height: h });
-      releaseCanvas(canvas);
-    } catch { /* skip unreadable page */ }
-  }
-  if (!doc.getPageCount()) throw new Error("This file is too damaged to recover any pages.");
-  return { outputs: [out(`${baseName(file.name)}-repaired.pdf`, await doc.save())], method: 'raster' };
+  let rebuilt = 0, partial = 0;
+  try {
+    const count = src ? src.getPageCount() : (pdf ||= await openForRender(file.bytes, file.password)).numPages;
+    for (let i = 0; i < count; i++) {
+      const page = src?.getPage(i);
+      if (page && !missingRefs(src, page.node)) {
+        const [copy] = await doc.copyPages(src, [i]);
+        doc.addPage(copy);
+        continue;
+      }
+      try { await raster(i); rebuilt++; continue; } catch { /* pdf.js can't draw it either */ }
+      // Keep what pdf-lib could read; some of it may be missing, but it beats losing the page.
+      if (page) { const [copy] = await doc.copyPages(src, [i]); doc.addPage(copy); partial++; }
+    }
+  } finally { if (pdf) await closePdf(pdf); }
+  if (!doc.getPageCount()) throw new Error('This file is too damaged to recover any pages.');
+  return { outputs: [out(`${baseName(file.name)}-repaired.pdf`, await doc.save())], method: rebuilt ? 'raster' : 'structure', rebuilt, partial };
 }
 
 /* ---------- Overlay editing (edit, sign, redact) ----------
@@ -545,22 +748,17 @@ export async function applyOverlays(file, items, outName) {
       const pos = rotatedOrigin(r);
       page.drawImage(img, { ...pos, width: r.rot % 180 ? r.h : r.w, height: r.rot % 180 ? r.w : r.h, rotate });
     } else if (it.type === 'text') {
-      const f = await font(it.font || 'sans');
+      const fam = it.font || 'sans';
+      const f = await font(fam);
       const size = it.fontSize * r.viewH; // font size stored relative to page height
+      const { vw, vh } = viewSize(page);
       const lines = String(it.text).split('\n');
-      const pos = rotatedOrigin(r);
-      lines.forEach((line, i) => {
-        const off = size * 1.2 * i + size;
-        // move down `off` from the top of the box along the rotated axis
-        const dx = [0, 90, 180, 270].indexOf(r.rot);
-        const boxH = r.rot % 180 ? r.w : r.h;
-        const shift = boxH - off;
-        const vec = [[0, 1], [-1, 0], [0, -1], [1, 0]][dx];
-        page.drawText(line, {
-          x: pos.x + vec[0] * shift, y: pos.y + vec[1] * shift,
-          size, font: f, color: hexToRgb(it.color || '#000000'), rotate,
+      for (const [i, line] of lines.entries()) {
+        await drawViewText(doc, page, line, {
+          x: it.x * vw, y: vh - (it.y * vh + size * 1.2 * i + size), size, font: f,
+          family: fam.split('-')[0], bold: fam.endsWith('-bold'), color: it.color || '#000000',
         });
-      });
+      }
     }
   }
   return [out(outName || `${baseName(file.name)}-edited.pdf`, await doc.save())];
@@ -587,6 +785,8 @@ export async function redact(file, items, onProgress) {
   const pdf = await openForRender(file.bytes, file.password);
   const doc = await PDFDocument.create();
   const affected = new Set(items.map((i) => i.page));
+  let helv = null;
+  const invisibleFont = async () => (helv ||= await doc.embedFont(StandardFonts.Helvetica));
   const n = src.getPageCount();
   for (let i = 0; i < n; i++) {
     if (!affected.has(i)) {
@@ -604,12 +804,40 @@ export async function redact(file, items, onProgress) {
       const page = doc.addPage([w, h]);
       page.drawImage(img, { x: 0, y: 0, width: w, height: h });
       releaseCanvas(canvas);
+      await keepTextOutside(pdf, i + 1, page, items.filter((x) => x.page === i), await invisibleFont());
     }
     onProgress?.((i + 1) / n);
   }
   await closePdf(pdf);
   doc.setProducer('');
   return [out(`${baseName(file.name)}-redacted.pdf`, await doc.save())];
+}
+
+/**
+ * A redacted page is a picture, which would make the rest of its text unsearchable. Every
+ * line that does not touch a black box is put back as invisible text in the same place.
+ * Anything that touches a box, even at one corner, is left out.
+ */
+async function keepTextOutside(pdf, n, page, boxes, font) {
+  const p = await pdf.getPage(n);
+  const vp = p.getViewport({ scale: 1 });
+  const { width: W, height: H } = page.getSize();
+  const charset = new Set(font.getCharacterSet());
+  const tc = await p.getTextContent();
+  for (const it of tc.items) {
+    if (!it.str?.trim()) continue;
+    const m = pdfjs.Util.transform(vp.transform, it.transform);
+    const size = Math.hypot(m[2], m[3]);
+    if (!size || !(m[0] > 0 && Math.abs(m[1]) < m[0] * 0.02)) continue;
+    const x0 = m[4], base = m[5], x1 = x0 + it.width * (W / vp.width);
+    const top = base - size, bottom = base + size * 0.25;
+    const hit = boxes.some((b) => x1 > b.x * W && x0 < (b.x + b.w) * W && bottom > b.y * H && top < (b.y + b.h) * H);
+    if (hit) continue;
+    const str = [...cleanText(it.str)].filter((ch) => charset.has(ch.codePointAt(0))).join('');
+    if (!str.trim()) continue;
+    page.drawText(str, { x: x0, y: H - base, size, font, opacity: 0 });
+  }
+  p.cleanup();
 }
 
 /* ---------- Crop ---------- */

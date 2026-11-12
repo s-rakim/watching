@@ -202,9 +202,9 @@ function renderFields() {
     crop: 'Drag the corners of the frame to choose what to keep.',
     compare: 'Removed words are marked on the left, added words on the right.',
     ocr: 'Pages are read at 300 dpi on this device. A big scan can take a minute or two.',
-    'pdf-to-word': 'Same layout keeps every line where it was, in its own font and colour, with the boxes, lines and pictures behind it. Flowing text gives plain paragraphs, headings and lists.',
+    'pdf-to-word': 'Same layout rebuilds the page from real Word parts: tables with their borders and shading, boxes, paragraphs that reflow, and pictures you can move. Flowing text gives plain paragraphs, headings and lists.',
     'pdf-to-excel': 'Works best on PDFs made from spreadsheets or reports. Numbers become real numbers you can add up.',
-    'pdf-to-powerpoint': 'Each page becomes one slide, shown as a picture of the page.',
+    'pdf-to-powerpoint': 'Editable slides keep everything where it was, as text boxes, shapes and pictures. Charts and other drawings come across as pictures.',
     summarize: 'Summarizer' in self ? 'Your browser has an on-device model, so the summary is written fresh.' : 'Key sentences are picked from the text. Scanned PDFs need OCR first.',
     translate: 'DeepL needs your API key in Sheaf/.env and sends the text to DeepL. "On this device" uses Chrome\'s built-in translator (Chrome 138+ on desktop) and sends nothing anywhere.',
   }[tool.id];
@@ -602,9 +602,11 @@ async function execute(tool, files, opts, progress) {
       return { outputs, summary: pct > 0 ? `${formatBytes(before)} down to ${formatBytes(after)}, ${pct}% smaller.` : 'This file is already as small as we can make it without hurting quality.' };
     }
     case 'repair': {
-      let raster = false;
-      const outputs = await each(async (f) => { const r = await ops.repair(f); raster ||= r.method === 'raster'; return r.outputs; });
-      return { outputs, summary: raster ? 'The structure was too damaged to rebuild, so pages were recovered as images.' : 'The file structure was rebuilt.' };
+      let rebuilt = 0, partial = 0;
+      const outputs = await each(async (f) => { const r = await ops.repair(f); rebuilt += r.rebuilt; partial += r.partial; return r.outputs; });
+      const notes = [rebuilt && `${rebuilt} page${rebuilt === 1 ? ' was' : 's were'} too damaged to keep as they were and came back as images.`,
+        partial && `${partial} page${partial === 1 ? ' is' : 's are'} missing parts of the original (often the fonts of a file that was cut short), so some text may look wrong.`].filter(Boolean);
+      return { outputs, summary: ['The file structure was rebuilt.', ...notes].join(' ') };
     }
     case 'pdf-to-jpg': return { outputs: await each((f, p) => ops.pdfToImages(f, opts, p)) };
     case 'pdf-to-markdown': return { outputs: await each((f) => ops.pdfToMarkdown(f, opts)) };
