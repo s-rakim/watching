@@ -18,6 +18,8 @@ from collections import Counter
 
 import pdfplumber
 
+from textfix import fix
+
 # ---------------------------------------------------------------- reading
 
 def read_blocks(src):
@@ -27,7 +29,7 @@ def read_blocks(src):
         for page in pdf.pages:
             lines = []
             for ln in page.extract_text_lines(layout=False, strip=True, return_chars=True):
-                text = re.sub(r"\s+", " ", ln["text"]).strip()
+                text = re.sub(r"\s+", " ", fix(ln["text"])).strip()
                 if not text:
                     continue
                 sizes = [c.get("size", 0) for c in ln.get("chars", []) if c.get("text", "").strip()]
@@ -78,18 +80,31 @@ page le la les des du de et en un une est que qui pour dans sur pas par au aux e
 der die das und ist mit den dem ein eine zu von nicht il di che non""".split())
 
 
+UNSPACED = re.compile("[\u0e00-\u0e7f\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\uf900-\ufaff]")
+
+
 def sentences(text):
     text = re.sub(r"(\d)\.(\d)", "\\1\u2024\\2", re.sub(r"\s+", " ", text))
     out = []
-    for s in re.findall(r"[^.!?]+(?:[.!?]+[\"')\]]*|$)", text):
+    for s in re.findall(r"[^.!?\u3002\uff01\uff1f\u0964]+(?:[.!?\u3002\uff01\uff1f\u0964]+[\"')\]\u300d]*|$)", text):
         s = s.strip().replace("\u2024", ".")
-        if len(s.split()) >= 5 and sum(ch.isdigit() for ch in s) < len(s) * 0.25:
+        # Chinese, Japanese, Thai and Korean don't put spaces between words, so count characters
+        long_enough = len(s.split()) >= 5 or len(UNSPACED.findall(s)) >= 8
+        if long_enough and sum(ch.isdigit() for ch in s) < len(s) * 0.25:
             out.append(s)
     return out
 
 
 def words(s):
-    return [w for w in re.findall(r"[^\W\d_][\w'-]+", s.lower()) if len(w) > 2 and w not in STOP]
+    out = []
+    for w in re.findall(r"[^\W\d_][\w'-]+", s.lower()):
+        if UNSPACED.search(w):
+            # pairs of characters stand in for words in unspaced scripts
+            chars = [c for c in w if UNSPACED.match(c)]
+            out += [a + b for a, b in zip(chars, chars[1:])]
+        elif len(w) > 2 and w not in STOP:
+            out.append(w)
+    return out
 
 
 def summarize(blocks, count):
