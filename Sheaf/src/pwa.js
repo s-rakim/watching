@@ -1,6 +1,8 @@
 // Install button, offline support and update notice. The service worker only exists in
 // production builds and only in a secure context: https, or http://localhost.
 
+import { isNativeApp } from './lib/native.js';
+
 let installPrompt = null;
 
 /** Header button for browsers that let a page offer installation (Chrome, Edge, Android). */
@@ -24,7 +26,8 @@ document.addEventListener('click', async (e) => {
   await p.prompt();
 });
 
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
+// The Android app already has every file on the phone, so it skips the service worker.
+if ('serviceWorker' in navigator && import.meta.env.PROD && !isNativeApp) {
   let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (reloading) location.reload();

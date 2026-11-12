@@ -93,6 +93,34 @@ Installing and offline use need a secure address: `https://`, or `http://localho
 
 Phones have far less memory than computers, and iOS caps each browser tab. Sheaf renders page previews only as they scroll into view, keeps them as small images, and scales down very large pages and 48 MP photos to stay under Safari's canvas limit. Files of a few hundred pages are fine on a recent phone. If a huge scan fails on an older iPhone, split it first or run that job on a computer.
 
+## Android app
+
+There's an APK on the repo's Releases page. It's this same app wrapped with [Capacitor](https://capacitorjs.com), so every tool runs on the phone and works offline. Results go to `Documents/Sheaf` when you tap Save, or anywhere through Share. DeepL translation isn't available in the APK because there's no relay server behind it; the on-device translator still works.
+
+To cut a new release, push a tag and the `Sheaf Android` workflow builds and uploads the APK:
+
+```bash
+git tag sheaf-v0.2.0 && git push origin sheaf-v0.2.0
+```
+
+You can also start it from the Actions tab and type a version.
+
+To sign with your own key instead of a debug key, make one once and add it as repository secrets (`SHEAF_KEYSTORE_BASE64`, `SHEAF_KEYSTORE_PASSWORD`, `SHEAF_KEY_ALIAS`, `SHEAF_KEY_PASSWORD`):
+
+```bash
+keytool -genkeypair -v -keystore sheaf.jks -alias sheaf -keyalg RSA -keysize 2048 -validity 10000
+base64 -w0 sheaf.jks   # paste the output into SHEAF_KEYSTORE_BASE64
+```
+
+Keep that file somewhere safe. Android only accepts an update signed with the same key as the installed app.
+
+Building it yourself needs Android Studio (or the Android SDK) and JDK 21:
+
+```bash
+npm run android          # builds the web app and copies it into android/
+cd android && ./gradlew assembleRelease
+```
+
 ## Notes
 
 - Compress re-encodes embedded JPEGs and leaves text and vector content alone, so files that are mostly text will not shrink much.

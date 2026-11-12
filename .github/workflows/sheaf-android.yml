@@ -1,0 +1,101 @@
+# Builds the Sheaf Android app and attaches the APK to a GitHub release.
+# Push a tag like sheaf-v0.1.0, or run it by hand from the Actions tab.
+#
+# Signing: add these repository secrets to sign with your own key. Without them the APK is
+# signed with a throwaway debug key, which installs fine but can't be upgraded in place by
+# a build signed with a different key.
+#   SHEAF_KEYSTORE_BASE64   base64 of the .jks file
+#   SHEAF_KEYSTORE_PASSWORD
+#   SHEAF_KEY_ALIAS
+#   SHEAF_KEY_PASSWORD
+name: Sheaf Android
+
+on:
+  push:
+    tags: ['sheaf-v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version, e.g. 0.1.0 (the release is tagged sheaf-v<version>)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Sheaf
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work out the version
+        id: v
+        env:
+          INPUT: ${{ inputs.version }}
+        run: |
+          if [ -n "$INPUT" ]; then v="$INPUT"; else v="${GITHUB_REF_NAME#sheaf-v}"; fi
+          IFS=. read -r a b c <<< "$v"
+          echo "name=$v" >> "$GITHUB_OUTPUT"
+          echo "code=$(( ${a:-0} * 10000 + ${b:-0} * 100 + ${c:-0} ))" >> "$GITHUB_OUTPUT"
+          echo "tag=sheaf-v$v" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Sheaf/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Build the web app
+        run: |
+          npm ci
+          npm run build
+          npx cap sync android
+
+      - name: Set up signing
+        env:
+          KEYSTORE: ${{ secrets.SHEAF_KEYSTORE_BASE64 }}
+          STORE_PW: ${{ secrets.SHEAF_KEYSTORE_PASSWORD }}
+          ALIAS: ${{ secrets.SHEAF_KEY_ALIAS }}
+          KEY_PW: ${{ secrets.SHEAF_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE" ]; then
+            echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/sheaf.jks"
+            {
+              echo "SHEAF_KEYSTORE=$RUNNER_TEMP/sheaf.jks"
+              echo "SHEAF_KEYSTORE_PASSWORD=$STORE_PW"
+              echo "SHEAF_KEY_ALIAS=$ALIAS"
+              echo "SHEAF_KEY_PASSWORD=$KEY_PW"
+            } >> "$GITHUB_ENV"
+          else
+            echo "::warning::No signing secrets set, so this APK uses a debug key."
+          fi
+
+      - name: Build the APK
+        working-directory: Sheaf/android
+        run: |
+          ./gradlew assembleRelease --no-daemon \
+            -PsheafVersionName=${{ steps.v.outputs.name }} \
+            -PsheafVersionCode=${{ steps.v.outputs.code }}
+          mv app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/Sheaf-${{ steps.v.outputs.name }}-android.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sheaf-android
+          path: Sheaf-${{ steps.v.outputs.name }}-android.apk
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.v.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Sheaf ${{ steps.v.outputs.name }} for Android
+          body_path: Sheaf/android/RELEASE_NOTES.md
+          files: Sheaf-${{ steps.v.outputs.name }}-android.apk

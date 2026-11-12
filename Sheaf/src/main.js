@@ -5,6 +5,7 @@ import { icon } from './lib/icons.js';
 import { readBytes, openForRender, renderPage, formatBytes, parseRanges, baseName, loadPdf, canvasToBlob } from './lib/pdf.js';
 import { looksLikePdf, pickerAccept, releaseCanvas, canShareFile, coarsePointer, isIOS, isStandalone } from './lib/device.js';
 import { installButton } from './pwa.js';
+import { isNativeApp, saveToDevice, shareFromDevice } from './lib/native.js';
 import * as ops from './lib/ops.js';
 import * as conv from './lib/convert.js';
 import { mountCanvasEditor } from './editor.js';
@@ -46,8 +47,8 @@ function home() {
   session = null;
   shell(`
     <section class="hero">
-      <h1>Every PDF job, done in your browser</h1>
-      <p>Merge, split, compress, convert, sign and lock your PDFs. No account, no upload, no waiting on a server.</p>
+      <h1>Sheaf PDF editor</h1>
+      <p>Edit, merge, split, sign and convert PDFs. Your files stay on your device.</p>
     </section>
     <div class="filters" role="tablist" aria-label="Tool categories">
       ${CATEGORIES.map((c, i) => `<button role="tab" class="chip" aria-selected="${i === 0}" data-cat="${c.id}">${c.label}</button>`).join('')}
@@ -683,16 +684,18 @@ async function done(outputs, summary, preview) {
   // Phones and tablets get a share sheet too: it is how you save to Files on iOS, or
   // send the result straight to Drive, mail or a chat on Android.
   const shareable = new File([file.blob], file.name, { type: file.blob.type || 'application/octet-stream' });
-  const share = (coarsePointer() || isIOS) && canShareFile(shareable);
+  const share = isNativeApp || ((coarsePointer() || isIOS) && canShareFile(shareable));
   // An iOS home-screen app has no download bar, and a download there opens a preview
   // that is easy to get stuck in. Let people choose instead of starting one for them.
-  const autoDownload = !(isIOS && isStandalone());
+  // In the Android app nothing is saved until the person taps Save, so a run they only
+  // wanted to share doesn't leave copies behind in Documents.
+  const autoDownload = !(isIOS && isStandalone()) && !isNativeApp;
   shell(`
     <section class="upload done hue-${tool.hue}">
       <span class="done-mark">${icon('check', 30)}</span>
       <h1>${doneTitle(tool)}</h1>
       <p>${summary ? `${esc(summary)} ` : ''}${outputs.length > 1 ? `${outputs.length} files, packed into one zip.` : ''}</p>
-      <a class="btn btn-cta btn-xl" id="dl" href="${url}" download="${esc(file.name)}">${icon('download', 22)} Download ${outputs.length > 1 ? 'all' : `<span class="dl-name">${esc(file.name)}</span>`}</a>
+      <a class="btn btn-cta btn-xl" id="dl" href="${url}" download="${esc(file.name)}">${icon('download', 22)} ${isNativeApp ? 'Save' : 'Download'} ${outputs.length > 1 ? 'all' : `<span class="dl-name">${esc(file.name)}</span>`}</a>
       ${share ? `<button class="btn btn-ghost" id="share" type="button">${icon('share', 18)} ${isIOS ? 'Save to Files or share' : 'Share'}</button>` : ''}
       <p class="hint">${formatBytes(file.blob.size)}</p>
       ${preview ? `<div class="preview"><h2>Key points</h2><ul>${preview.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>` : ''}
@@ -702,7 +705,19 @@ async function done(outputs, summary, preview) {
       </div>
     </section>`);
   $('#again').addEventListener('click', (e) => { e.preventDefault(); openTool(tool); });
-  $('#share')?.addEventListener('click', () => {
+  if (isNativeApp) {
+    $('#dl').addEventListener('click', async (e) => {
+      e.preventDefault();
+      try { toast(`Saved to ${await saveToDevice(file.blob, file.name)}`, 'info'); }
+      catch { toast('Could not save to Documents. Use Share and pick Files or Drive instead.'); }
+    });
+    $('#share').addEventListener('click', () => {
+      shareFromDevice(file.blob, file.name).catch((e) => {
+        if (!/cancel/i.test(e?.message || '')) toast('Sharing did not work. Try Save instead.');
+      });
+    });
+  }
+  if (!isNativeApp) $('#share')?.addEventListener('click', () => {
     navigator.share({ files: [shareable], title: file.name }).catch((e) => {
       if (e.name !== 'AbortError') toast('Sharing did not work here. Use Download instead.');
     });
