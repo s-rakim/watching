@@ -34,12 +34,13 @@ To reach it from your own devices anywhere, Tailscale is the safer option: `tail
 | Optimize | Compress PDF, Repair PDF, OCR PDF |
 | Convert to PDF | JPG to PDF, Word to PDF, PowerPoint to PDF, Excel to PDF, HTML to PDF |
 | Convert from PDF | PDF to JPG, PDF to Word, PDF to PowerPoint, PDF to Excel, PDF to PDF/A |
-| Edit | Edit PDF, Rotate PDF, Add page numbers, Add watermark, Crop PDF |
+| Edit | Edit Word, Edit PDF, Rotate PDF, Add page numbers, Add watermark, Crop PDF |
 | Security | Unlock PDF, Protect PDF, Sign PDF, Redact PDF, Compare PDF |
 | Read & translate | Summarize PDF, Translate PDF (DeepL key or offline packs, see below) |
 
 A few things worth knowing:
 
+- **Edit Word is a full word processor**, [WordCraft](https://github.com/storytold/wordcraft) (MIT OR Apache-2.0), running in the browser. It opens .docx, .doc, .odt, .rtf, Markdown, text and HTML, or starts blank from its own home screen, and has the ribbon you'd expect: styles, tables, pictures, headers and footers, page setup, track changes, comments, spelling. Save and PDF download the file. After PDF to Word, **Edit it here** opens the result in it. It needs WebGPU or WebGL2, which every current browser has.
 - **Edit, Sign, Redact, Crop and Compare run entirely in the browser.** The file isn't even sent to the local server.
 - **Redact really removes things.** Pages with black boxes on them are rebuilt as images, so the text underneath is gone from the file, not just covered. Those pages lose their selectable text; run OCR afterwards if you want it back.
 - **Sign adds a visible signature**, drawn, typed or uploaded. It is not a certificate-based digital signature.
@@ -89,6 +90,10 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 The repository also has a GitHub Actions workflow, **Sheaf-D image** (`.github/workflows/sheaf-d-image.yml`), that does the same and publishes `ghcr.io/s-rakim/sheaf-d`. It only runs when started from the Actions tab or when a tag like `sheaf-d-v1.0.0` is pushed. To use the published image instead of building, replace `build: .` in `docker-compose.yml` with `image: ghcr.io/s-rakim/sheaf-d:latest` and run `docker compose up -d`.
 
 The arm64 half is built under emulation on GitHub's runners, so the first run takes a while (LibreOffice and Chromium are large). Later runs reuse the cache.
+
+### The Word editor build
+
+The Docker image compiles WordCraft from source in its own stage (pinned with `WORDCRAFT_REV` in the Dockerfile, the same commit as `Sheaf/public/wordcraft/REVISION`). It needs Rust, so it is the slowest part of the first build, around 15 to 25 minutes; Docker caches it after that. Running Sheaf-D from a checkout without Docker copies the ready-made build from `Sheaf/public/wordcraft` instead (`npm run dev` and `npm run build` in `web/` do this for you).
 
 ## Settings
 
@@ -187,6 +192,6 @@ Adding a server tool: write a function in `server/src/tools/` that takes the upl
 
 ## Credits
 
-Sheaf-D is glue around some excellent open source software: qpdf, Ghostscript, LibreOffice, OCRmyPDF, Tesseract, Poppler, Chromium, pdf.js, pdf-lib, pdf2docx, DeepL's Python library and, if you turn it on, Argos Translate. Each has its own licence. Ghostscript in particular is AGPL, which matters if you plan to offer this as a service to other people.
+Sheaf-D is glue around some excellent open source software: WordCraft, qpdf, Ghostscript, LibreOffice, OCRmyPDF, Tesseract, Poppler, Chromium, pdf.js, pdf-lib, pdf2docx, DeepL's Python library and, if you turn it on, Argos Translate. Each has its own licence. Ghostscript in particular is AGPL, which matters if you plan to offer this as a service to other people.
 
 Full setup, serving and troubleshooting: [../docs/guide.md](../docs/guide.md).

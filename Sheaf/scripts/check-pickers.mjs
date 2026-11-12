@@ -15,6 +15,17 @@ function tinyPdf() {
   out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
   return Buffer.from(out, 'latin1');
 }
+// The smallest .docx Word opens, also handed back with no extension.
+async function tinyDocx() {
+  const { default: JSZip } = await import('jszip');
+  const z = new JSZip();
+  z.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
+  z.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+  z.file('word/document.xml', '<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Hello</w:t></w:r></w:p></w:body></w:document>');
+  return z.generateAsync({ type: 'nodebuffer' });
+}
+const DOCX = await tinyDocx();
+
 // 1×1 PNG
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 
@@ -51,11 +62,13 @@ async function run(label, ctxOpts, android) {
     if (!chooser) { fail(`${tool.id}: tapping the button did not open a picker`); await page.close(); continue; }
 
     const n = tool.min || 1;
+    const word = tool.mode === 'word' || tool.docs;
     const files = images
       ? Array.from({ length: n }, (_, i) => ({ name: `photo${i}.png`, mimeType: 'image/png', buffer: PNG }))
+      : word ? Array.from({ length: n }, (_, i) => ({ name: `document${i}`, mimeType: 'application/octet-stream', buffer: DOCX }))
       : Array.from({ length: n }, (_, i) => ({ name: `document${i}`, mimeType: 'application/octet-stream', buffer: tinyPdf() }));
     await chooser.setFiles(chooser.isMultiple() ? files : files[0]);
-    const opened = await page.locator('.work').waitFor({ timeout: 8000 }).then(() => true, () => false);
+    const opened = await page.locator(tool.mode === 'word' ? '.word-work' : '.work').waitFor({ timeout: 8000 }).then(() => true, () => false);
     if (!opened) fail(`${tool.id}: picked file did not open (${(await page.locator('.toast').allInnerTexts()).join(' ') || 'no message'})`);
     else console.log(`  ✓ ${tool.id}`);
     await page.close();

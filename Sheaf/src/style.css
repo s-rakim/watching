@@ -324,3 +324,28 @@ mark.add { background: #dbeafe; color: #00507a; border-radius: 3px; padding: 1px
   .work { padding-bottom: calc(64px + var(--safe-b)); }
   .panel { top: 0; height: auto; }
 }
+
+/* Word editor (WordCraft in a frame) */
+.word-work { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+.word-bar { display: flex; align-items: center; gap: 12px; padding: calc(8px + env(safe-area-inset-top, 0px)) calc(16px + var(--safe-r)) 8px calc(16px + var(--safe-l)); background: var(--surface); border-bottom: 1px solid var(--line); }
+.word-bar .back { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 10px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 14px; }
+.word-bar .back:hover { background: var(--tint, #e5eff5); }
+.word-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; color: var(--ink); }
+.word-name b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
+.word-dirty { flex: none; font-style: normal; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: #fff0cc; color: #8a5200; }
+.word-actions { display: flex; gap: 8px; }
+.word-actions .btn { min-height: 44px; padding: 8px 16px; }
+.word-host { position: relative; flex: 1; min-height: 0; background: #e6e6e6; }
+.wordcraft-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
+.word-wait, .word-fail { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; color: var(--ink-2); }
+.word-wait { pointer-events: none; z-index: 1; }
+.word-fail { background: var(--bg); color: var(--ink); }
+.word-fail p { max-width: 460px; color: var(--ink-2); }
+.word-fail .card-icon { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 16px; background: #e5eff5; color: #00507a; }
+.doc-ext { display: flex; flex-direction: column; align-items: center; gap: 6px; color: #00507a; }
+.doc-ext b { font-size: 12px; letter-spacing: .06em; }
+@media (max-width: 640px) {
+  .word-bar { gap: 6px; padding-left: calc(8px + var(--safe-l)); padding-right: calc(8px + var(--safe-r)); }
+  .word-bar-label { display: none; }
+  .word-actions .btn { padding: 8px 12px; }
+}

@@ -35,6 +35,14 @@ self.addEventListener('fetch', (event) => {
   if (url.origin === self.location.origin && url.pathname.includes('/api/')) return;
 
   if (url.origin === self.location.origin) {
+    if (req.mode === 'navigate' && url.pathname.includes('/wordcraft/')) {
+      // The Word editor's page, opened in a frame with ?host=parent. Keep the last copy for offline use.
+      event.respondWith(fetch(req).then((res) => {
+        if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(url.origin + url.pathname, copy)); }
+        return res;
+      }).catch(async () => (await caches.match(url.origin + url.pathname)) || Response.error()));
+      return;
+    }
     if (req.mode === 'navigate') {
       // Pages: try the network so a new release shows up, fall back to the stored copy.
       event.respondWith(fetch(req).catch(async () => (await caches.match(scope('./'))) || Response.error()));
