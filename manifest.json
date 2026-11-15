@@ -1,0 +1,186 @@
+{
+ "version": "bafd3deff18e",
+ "commit": "b4dfeba6ef0d064c88a16685a4a3bf304ee74ddf",
+ "built": "2026-11-15T15:49:36.820Z",
+ "minNativeCode": 101,
+ "apk": {
+  "version": "0.1.0",
+  "code": 100,
+  "url": "https://github.com/s-rakim/watching/releases/download/sheaf-v0.1.0/Sheaf-0.1.0-android.apk",
+  "page": "https://github.com/s-rakim/watching/releases/tag/sheaf-v0.1.0"
+ },
+ "files": {
+  "assets/esm--EoH6RuP.js": [
+   "94ca8fbb2bf72f267508ba618579a01d2fe20ebac4bcedbd0fb64a646de6832b",
+   1352
+  ],
+  "assets/esm-Rjm3hZza.js": [
+   "67602daca727f30ab0204649810eb5b614033508f007b3f9fa3ce9da9e5915e5",
+   330
+  ],
+  "assets/index-BysiMfIG.css": [
+   "4e68158ac8721c290eaf7e67dbb69fb39f5161a510d3d8825121db03b58a8713",
+   23742
+  ],
+  "assets/index-iUaoFFee.js": [
+   "2eb5d41146f44ad179967a6cb9622f37e1ee0e7a3e1bcfa896be70977d540eef",
+   1349616
+  ],
+  "assets/liveupdate-DkW_aUrE.js": [
+   "1d13bbda788bf4eab7a48ee3f8a17e172131453dd9134e0caf54f444481c5572",
+   4428
+  ],
+  "assets/pdf.worker.min-B5Yc7dP4.mjs": [
+   "b4c8353ded0d88d2e2009574a29eb4e0c3ff7e942ecdf51ef5f71566a9667f31",
+   1327591
+  ],
+  "assets/src-CfuNh1o4.js": [
+   "501974176d8afcc09b080b67e670fb3e3f346f0636bbaa9ea210aa5210c554f2",
+   17251
+  ],
+  "assets/web-Bj8QfDDR.js": [
+   "6610714c403b60a474c9d29d499a51974e1d431e83786e9d3995fa1da71afcf4",
+   365
+  ],
+  "assets/web-CZpuvGRV.js": [
+   "4512f9e4a7f6a8e52d3b0b5d35586ed4537e67ed1c1917861d67cf0787b0e715",
+   844
+  ],
+  "assets/web-CjxkjFA1.js": [
+   "3a129e54441cd583691cb4963c41bd51cbd2c5909348550399c941baa67a31e0",
+   8476
+  ],
+  "favicon.svg": [
+   "71b117d307ec303f772a6b385733821922c733b9bd97dcf78888de4e159a095d",
+   330
+  ],
+  "icons/apple-touch-icon.png": [
+   "81bb15a5c76ed0db1e39b3e2983c955c7e69b3d620b80cd6f57d2668a6d92553",
+   1231
+  ],
+  "icons/icon-192.png": [
+   "fd18b98328f4c4c8d223c771cdde8f8f1588e4d7917aa6f6610abeee045b8618",
+   3021
+  ],
+  "icons/icon-512.png": [
+   "9dcaa33b51f42ee336331803d117cb1e23b393b236edcd8c763d5d2614344573",
+   9062
+  ],
+  "icons/icon-maskable-512.png": [
+   "389276e491d1d13755c450e37ee62e1338f0151e67a0af32e6b1f4c73dcb7d5d",
+   3703
+  ],
+  "index.html": [
+   "9c070e2e935bd740888c174f14ae7f247bf1dbbcebe50ff0efe3ed8d037854ae",
+   1566
+  ],
+  "manifest.webmanifest": [
+   "8b201a491615682321112b93edaa78f9b777efa030ba5a1fe52e1475484835bd",
+   1191
+  ],
+  "ocr/core/tesseract-core-lstm.js": [
+   "6510efc4e8b45c5465df30679b9911ffe0071cd2ee982fa064e6f5136ef2de85",
+   89261
+  ],
+  "ocr/core/tesseract-core-lstm.wasm": [
+   "66b17df6e20c5329a17ffa9c202a47eaa3e32500b253d4c7f38e7f2bc01457c3",
+   2855361
+  ],
+  "ocr/core/tesseract-core-lstm.wasm.js": [
+   "eef5f8b2f8e20e150680b20adaec4a60babafee3adbe8a94583c81fee46e8680",
+   3896484
+  ],
+  "ocr/core/tesseract-core-relaxedsimd-lstm.js": [
+   "a37ac78b707e8d5d3d2e532cc3c4e69b04d127ea44a608f1e7de17640402aa5c",
+   89360
+  ],
+  "ocr/core/tesseract-core-relaxedsimd-lstm.wasm": [
+   "7985c92d4c64e7267d24cadffe1b2a1da6bf8aa55fdcaf953fe94fe122a24545",
+   2862266
+  ],
+  "ocr/core/tesseract-core-relaxedsimd-lstm.wasm.js": [
+   "861a536cf9ef8e63cb644d57bab39c388f37f7d6b6f60024b741c5f6b39a59b3",
+   3905767
+  ],
+  "ocr/core/tesseract-core-simd-lstm.js": [
+   "e48e2f02ddae3716c8dd24bf41cd290d4efa96892d689cdc4013c2545d63f469",
+   89271
+  ],
+  "ocr/core/tesseract-core-simd-lstm.wasm": [
+   "34e8d50cac216427d86bf397d610fdd9f49492539bbcdfbfccc4eda20c810bea",
+   2857601
+  ],
+  "ocr/core/tesseract-core-simd-lstm.wasm.js": [
+   "c58b46a4c796c0b8afccf77591d5b875b6896b45d402bbce8caa6f5362447b38",
+   3899472
+  ],
+  "ocr/lang/deu.traineddata.gz": [
+   "306c4280d0cbed46fbff727486bd43b92730181bae80f56941a091f363bdf28b",
+   1333102
+  ],
+  "ocr/lang/eng.traineddata.gz": [
+   "45b4cb346724ac1774f1c36f42f182b887bcdb28ebe63e6fff90ac41f3fcff91",
+   2952873
+  ],
+  "ocr/lang/fra.traineddata.gz": [
+   "d611139672b3752c7097e671e4a1d9209dfd37f2aeb081ef6487fba3351e9255",
+   707406
+  ],
+  "ocr/lang/ita.traineddata.gz": [
+   "f702fcfad297ce028ede3626d1467b67939f23ff23595f9badd54681cf25a4d3",
+   1660998
+  ],
+  "ocr/lang/por.traineddata.gz": [
+   "dacebc1386ddaaf8389f81094236cca0d690897cde693d48cbdaa881c86e2b4c",
+   1392239
+  ],
+  "ocr/lang/spa.traineddata.gz": [
+   "40be52f97b5d4eb7460073dc1f94cd546b27150333c0bf854ed7e7132db6bceb",
+   2100190
+  ],
+  "ocr/worker.min.js": [
+   "576b7df7e3393e137e51849357c9adb53fe7ac1bb69bfa06cf3d61520f182c6d",
+   111307
+  ],
+  "sw.js": [
+   "76b2ce5ca03c84f54a6fc887e89fae7fd9d327984e403a090bddd314302b9a30",
+   3506
+  ],
+  "wordcraft/LICENSE-APACHE": [
+   "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+   10174
+  ],
+  "wordcraft/LICENSE-MIT": [
+   "fc257de83c44ae49e4aad1cf777b886794be3ac9c8d00c010ef55935d5bbeba5",
+   1101
+  ],
+  "wordcraft/NOTICE": [
+   "8ff59a56c883fd708ed041c7a0ce4e16bb040e03027d94677d324ce711ebba2d",
+   12891
+  ],
+  "wordcraft/REVISION": [
+   "9b06b482354a420ef080b57839efce15222c54c2344d130291629de5b8b8506e",
+   41
+  ],
+  "wordcraft/index.html": [
+   "0c642b1ffd8401896ea00c34e98ad9e3f69ba4d4d0f53eda3db3ff0ad97d5922",
+   1789
+  ],
+  "wordcraft/snippets/eframe-d31a8450ea12dfc1/inline0.js": [
+   "22a98f9d0c5a0532d291bdc9a3050439420b3d11143b4568fcfd3c66fff36995",
+   280
+  ],
+  "wordcraft/wordcraft-fa59e09a3f921e03.ico": [
+   "53a23dcf66260f44d87d4d143d633395f3e967f391eda47e6e9cc3a52f820225",
+   18378
+  ],
+  "wordcraft/wordcraft-web-80f94a8008125e09.js": [
+   "486b898fcd983ca43db5be2572e778eacbef8790a1646126b616208eba60c1d3",
+   185582
+  ],
+  "wordcraft/wordcraft-web-97d8fe22a353f38_bg.wasm": [
+   "3c86eb2cc8e38f6b17e502dcd35d72fae4e18a7bf1b37ab20bd6e87cfa7a13d2",
+   51665829
+  ]
+ }
+}
