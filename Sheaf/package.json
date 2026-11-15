@@ -10,12 +10,15 @@
     "build": "vite build",
     "preview": "vite preview",
     "serve": "npm run build && vite preview --host --port 8080",
+    "update": "git pull --ff-only && npm install && npm run serve",
     "test:pickers": "node scripts/check-pickers.mjs",
-    "android": "npm run build && cap sync android"
+    "android": "npm run build && cap sync android",
+    "test:live": "node --import ./scripts/live-sim/register.mjs scripts/live-sim/run.mjs"
   },
   "dependencies": {
     "@cantoo/pdf-lib": "^2.11.1",
     "@capacitor/android": "^8.6.0",
+    "@capacitor/app": "^8.1.2",
     "@capacitor/core": "^8.6.0",
     "@capacitor/filesystem": "^8.1.5",
     "@capacitor/share": "^8.0.3",

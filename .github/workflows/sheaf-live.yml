@@ -1,0 +1,72 @@
+# Publishes every change to Sheaf on main as a live update for the Android app.
+#
+# The build goes to the sheaf-live branch (manifest.json plus blobs/), which the app reads
+# from raw.githubusercontent.com. That branch is rewritten on each run, so it never grows.
+# Phones download only the files that changed and switch over on the next restart.
+#
+# Changes to the native side (Sheaf/android, capacitor.config.json, Capacitor plugins) can't
+# reach phones this way. The feed then asks for an APK newer than the last release; cut one
+# with the "Sheaf Android" workflow and this one runs again when it finishes.
+name: Sheaf live update
+
+on:
+  push:
+    branches: [main]
+    paths: ['Sheaf/**', '.github/workflows/sheaf-live.yml']
+  workflow_run:
+    workflows: ['Sheaf Android']
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sheaf-live
+  cancel-in-progress: true
+
+jobs:
+  feed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          # Release tags are needed to tell which APKs can take this build.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Sheaf/package-lock.json
+
+      - name: Build
+        working-directory: Sheaf
+        run: |
+          npm ci
+          npm run build
+
+      - name: Make the feed
+        working-directory: Sheaf
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/live-feed.mjs dist "$RUNNER_TEMP/feed"
+
+      - name: Publish to the sheaf-live branch
+        working-directory: ${{ runner.temp }}/feed
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > README.md <<'EOF'
+          Live updates for the Sheaf Android app, written by the "Sheaf live update" workflow.
+          Don't edit this branch: every run replaces it.
+          EOF
+          git init -q -b sheaf-live
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Live update $(jq -r .version manifest.json) from $(jq -r .commit manifest.json | cut -c1-7)"
+          git push -q -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" sheaf-live
+          echo "### Live update $(jq -r .version manifest.json)" >> "$GITHUB_STEP_SUMMARY"
+          jq -r '"Needs APK build \(.minNativeCode). Newest APK: \(.apk.version // "none")."' manifest.json >> "$GITHUB_STEP_SUMMARY"

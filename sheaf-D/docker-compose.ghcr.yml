@@ -1,0 +1,40 @@
+# Runs the prebuilt Sheaf-D image from GitHub's container registry and keeps it up to date.
+#
+#   docker compose -f docker-compose.ghcr.yml up -d
+#
+# Every change merged to main builds a new ghcr.io/s-rakim/sheaf-d:latest. Watchtower checks
+# for it every 30 minutes, pulls it and restarts Sheaf-D. Open tabs get a "Reload" notice.
+# Uploads only live for the length of a request, so a restart loses nothing but a job that
+# happens to be running at that moment.
+services:
+  sheaf-d:
+    image: ghcr.io/s-rakim/sheaf-d:latest
+    container_name: sheaf-d
+    restart: unless-stopped
+    ports:
+      # Only this computer can reach it. Change to "8080:8080" to share it on your network.
+      - "127.0.0.1:8080:8080"
+    environment:
+      MAX_UPLOAD_MB: "500"
+      DEEPL_AUTH_KEY: ${DEEPL_AUTH_KEY:-}
+    tmpfs:
+      - /work:size=4g,uid=1000,gid=1000
+    shm_size: 1gb
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      # Watchtower only touches containers that carry this label.
+      com.centurylinklabs.watchtower.enable: "true"
+
+  watchtower:
+    # The original containrrr/watchtower stopped getting releases in 2024; this fork is
+    # maintained and works with current Docker Engine versions.
+    image: nickfedor/watchtower:latest
+    container_name: sheaf-d-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_POLL_INTERVAL: "1800"
+      WATCHTOWER_CLEANUP: "true"
