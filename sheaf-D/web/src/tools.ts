@@ -8,6 +8,7 @@ import {
   FileArchive,
   FileImage,
   FileOutput,
+  FilePen,
   FileSpreadsheet,
   FileText,
   FileType,
@@ -67,7 +68,7 @@ export type Field =
   | (FieldBase & { type: 'steps' })
   | (FieldBase & { type: 'file'; accept: string });
 
-export type Workspace = 'pages' | 'editor' | 'crop' | 'compare';
+export type Workspace = 'pages' | 'editor' | 'crop' | 'compare' | 'word';
 export type Capability = 'qpdf' | 'ghostscript' | 'libreoffice' | 'ocr' | 'poppler' | 'python' | 'chromium' | 'translate';
 
 export interface ToolDef {
@@ -565,6 +566,22 @@ export const TOOLS: ToolDef[] = [
   },
 
   // Edit
+  {
+    id: 'edit-word',
+    name: 'Edit Word',
+    blurb: 'Open a Word document and work on it in a full word processor: styles, tables, track changes, comments, headers and page layout.',
+    category: 'edit',
+    icon: FilePen,
+    accept: ['docx', 'docm', 'dotx', 'dotm', 'doc', 'dot', 'odt', 'ott', 'fodt', 'rtf', 'txt', 'md', 'html', 'htm'],
+    multiple: false,
+    // No file needed: the editor starts on its own home screen, with Open, Blank and templates.
+    minFiles: 0,
+    noun: 'document',
+    action: 'Open',
+    working: 'Opening your document',
+    workspace: 'word',
+    local: true,
+  },
   {
     id: 'edit',
     name: 'Edit PDF',

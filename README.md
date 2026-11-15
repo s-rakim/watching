@@ -6,7 +6,7 @@ Two PDF toolkits that keep your files on your own machine. They share a look and
 | --- | --- | --- |
 | Runs as | A static site in your browser | A Docker container with a small server |
 | Needs | Node 20+ to build it, then any web server | Docker with Compose |
-| Tools | 27: organise, compress, repair, OCR, JPG ↔ PDF, PDF to Word, Excel, PowerPoint and Markdown, edit, sign, protect, unlock, redact, compare, summarise, translate and more | 32: everything in Sheaf except PDF to Markdown, plus Word, Excel, PowerPoint and HTML to PDF, PDF/A and workflows that chain several tools |
+| Tools | 29: organise, compress, repair, OCR, JPG ↔ PDF, PDF to Word, Excel, PowerPoint and Markdown, edit, sign, protect, unlock, redact, compare, summarise, translate, plus a Word editor and Word converter | 33: everything in Sheaf except PDF to Markdown and Convert Word, plus Word, Excel, PowerPoint and HTML to PDF, PDF/A and workflows that chain several tools |
 | Files go | Nowhere. The browser does all the work | To the container on your machine, held in memory and dropped once you've downloaded the result |
 
 Both work on Android, iPhone, iPad, Linux, macOS and Windows: touch-friendly layouts for phones and tablets, drag to reorder with a finger, and a home-screen icon if you want one. Sheaf also works offline once installed. The Sheaf-D image builds for Intel/AMD and ARM (Apple Silicon, Raspberry Pi). Each folder's README has a "Phones, tablets and computers" section with the details and the browser versions.

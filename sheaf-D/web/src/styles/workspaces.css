@@ -550,3 +550,77 @@
   background: var(--accent-soft);
   font-weight: var(--font-weight-heading);
 }
+
+/* Edit Word: WordCraft in a frame, filling the canvas ------------------- */
+.word-content {
+  min-width: 0;
+}
+.word-canvas {
+  background: #e6e6e6;
+}
+.word-host {
+  position: absolute;
+  inset: 0;
+}
+.wordcraft-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+.word-wait,
+.word-fail {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--g) * 3);
+  padding: calc(var(--g) * 6);
+  text-align: center;
+}
+.word-wait {
+  pointer-events: none;
+  color: var(--color-text-maxcontrast);
+}
+.word-fail {
+  background: var(--color-main-background);
+  color: var(--color-main-text);
+}
+.word-fail p {
+  max-width: 460px;
+  color: var(--color-text-maxcontrast);
+}
+.word-wait .spinner {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 4px solid var(--color-border);
+  border-top-color: var(--color-primary-element);
+  animation: word-spin 0.8s linear infinite;
+}
+@keyframes word-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.word-dirty {
+  margin-left: calc(var(--g) * 2);
+  padding: 2px 8px;
+  border-radius: var(--border-radius-pill);
+  background: #fff0cc;
+  color: #8a5200;
+  font-size: var(--font-size-small);
+  font-weight: 700;
+}
+@media (max-width: 1023px) {
+  /* Other workspaces stack the canvas over a sidebar on small screens. This one has no
+     sidebar, so the editor takes the whole height above the action bar. */
+  .word-canvas {
+    flex: 1;
+    height: auto;
+    min-height: 70vh;
+    min-height: calc(100dvh - 140px);
+  }
+}

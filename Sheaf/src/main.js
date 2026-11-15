@@ -9,6 +9,8 @@ import { isNativeApp, saveToDevice, shareFromDevice } from './lib/native.js';
 import * as ops from './lib/ops.js';
 import * as conv from './lib/convert.js';
 import { mountCanvasEditor } from './editor.js';
+import { mountWordEditor } from './wordedit.js';
+import { asWordFile, convertDocument } from './lib/wordcraft.js';
 
 const app = document.getElementById('app');
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -16,6 +18,7 @@ const h = (html) => { const t = document.createElement('template'); t.innerHTML 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let uid = 0;
 let session = null; // state of the tool currently open
+let handoff = null; // a file another tool passes to the Word editor (PDF to Word → Edit)
 
 /* ------------------------------------------------------------------ shell */
 function shell(inner) {
@@ -82,14 +85,18 @@ function openTool(tool) {
         ${icon('upload', 22)} ${pickLabel(tool)}
         <input type="file" class="pick" accept="${pickerAccept(tool.accept)}" ${tool.multiple ? 'multiple' : ''} />
       </label>
+      ${tool.blank ? `<button class="btn btn-ghost" id="blank" type="button">${icon('filePlus', 18)} Start a blank document</button>` : ''}
       ${tool.capture ? `<label class="btn btn-ghost has-pick">${icon('camera', 18)} Use camera<input type="file" class="pick" accept="image/*" capture="environment" /></label>` : ''}
-      <p class="hint">or drop ${tool.mode === 'images' ? 'images' : 'PDFs'} anywhere on this page</p>
+      <p class="hint">or drop ${tool.mode === 'images' ? 'images' : wordTool(tool) ? 'documents' : 'PDFs'} anywhere on this page</p>
     </section>`);
+  $('#blank')?.addEventListener('click', () => { session.blank = true; workspace(); });
+  if (handoff && tool.mode === 'word') { const f = handoff; handoff = null; addFiles([f]); }
   document.querySelectorAll('.upload input[type=file]').forEach((inp) =>
     inp.addEventListener('change', () => { const list = [...inp.files]; inp.value = ''; addFiles(list); }));
 }
 
-const pickLabel = (t) => t.mode === 'images' ? 'Select images' : t.multiple ? 'Select PDF files' : 'Select PDF file';
+const wordTool = (t) => t.mode === 'word' || t.docs;
+const pickLabel = (t) => t.mode === 'images' ? 'Select images' : wordTool(t) ? (t.multiple ? 'Select documents' : 'Select a document') : t.multiple ? 'Select PDF files' : 'Select PDF file';
 
 function defaults(tool) {
   const o = { ...(tool.fixed || {}) };
@@ -142,9 +149,13 @@ async function openPdfFile(file) {
 async function addFiles(list) {
   if (!session) return;
   const { tool } = session;
-  const fits = await Promise.all(list.map((f) => matches(f, tool)));
-  const ok = list.filter((_, i) => fits[i]);
-  if (!ok.length) return toast(tool.mode === 'images' ? 'Those are not image files.' : 'Please choose PDF files.');
+  let ok;
+  if (wordTool(tool)) ok = (await Promise.all(list.map((f) => asWordFile(f).catch(() => null)))).filter(Boolean);
+  else {
+    const fits = await Promise.all(list.map((f) => matches(f, tool)));
+    ok = list.filter((_, i) => fits[i]);
+  }
+  if (!ok.length) return toast(tool.mode === 'images' ? 'Those are not image files.' : wordTool(tool) ? 'Please choose Word documents (.docx, .doc, .odt, .rtf, .md, .txt or .html).' : 'Please choose PDF files.');
   const firstBatch = session.files.length === 0;
   if (firstBatch) app.querySelector('.upload')?.classList.add('busy');
   for (const f of ok) {
@@ -153,6 +164,8 @@ async function addFiles(list) {
     try {
       if (tool.mode === 'images') {
         session.files.push({ id: ++uid, name: f.name, size: f.size, file: f, url: URL.createObjectURL(f) });
+      } else if (wordTool(tool)) {
+        session.files.push({ id: ++uid, name: f.name, size: f.size, file: f, doc: true });
       } else {
         const rec = await openPdfFile(f);
         if (!rec) continue;
@@ -168,6 +181,12 @@ async function addFiles(list) {
 /* -------------------------------------------------------------- workspace */
 function workspace() {
   const { tool } = session;
+  if (tool.mode === 'word') {
+    // The editor has its own ribbon, so it gets the whole screen under one slim bar.
+    app.innerHTML = '<div class="word-work"></div>';
+    session.word = mountWordEditor($('.word-work'), session, { icon, toast, deliver: saveOut });
+    return;
+  }
   shell(`
     <div class="work hue-${tool.hue}">
       <section class="stage" aria-label="Your files"></section>
@@ -277,7 +296,7 @@ function renderStage() {
 
   stage.innerHTML = `<div class="tiles">${session.files.map((f, i) => `
     <figure class="tile" data-i="${i}">
-      <div class="thumb" data-thumb="${f.id}">${f.url ? `<img src="${f.url}" alt="" />` : f.broken ? icon('wrench', 32) : ''}</div>
+      <div class="thumb" data-thumb="${f.id}">${f.url ? `<img src="${f.url}" alt="" />` : f.broken ? icon('wrench', 32) : f.doc ? `<span class="doc-ext">${icon('fileWord', 36)}<b>${esc(f.name.split('.').pop().toUpperCase())}</b></span>` : ''}</div>
       <figcaption title="${esc(f.name)}">${esc(f.name)}</figcaption>
       <small>${f.pageCount != null && !f.broken ? `${f.pageCount} page${f.pageCount === 1 ? '' : 's'} · ` : ''}${formatBytes(f.size)}${f.locked ? ' · locked' : ''}</small>
       <div class="tile-actions">
@@ -608,6 +627,7 @@ async function execute(tool, files, opts, progress) {
         partial && `${partial} page${partial === 1 ? ' is' : 's are'} missing parts of the original (often the fonts of a file that was cut short), so some text may look wrong.`].filter(Boolean);
       return { outputs, summary: ['The file structure was rebuilt.', ...notes].join(' ') };
     }
+    case 'word-convert': return { outputs: await each(async (f) => [await convertDocument(f.file, opts.format)]) };
     case 'pdf-to-jpg': return { outputs: await each((f, p) => ops.pdfToImages(f, opts, p)) };
     case 'pdf-to-markdown': return { outputs: await each((f) => ops.pdfToMarkdown(f, opts)) };
     case 'pdf-to-word': return { outputs: await each((f, p) => conv.pdfToWord(f, opts, p)) };
@@ -701,12 +721,17 @@ async function done(outputs, summary, preview) {
       ${share ? `<button class="btn btn-ghost" id="share" type="button">${icon('share', 18)} ${isIOS ? 'Save to Files or share' : 'Share'}</button>` : ''}
       <p class="hint">${formatBytes(file.blob.size)}</p>
       ${preview ? `<div class="preview"><h2>Key points</h2><ul>${preview.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>` : ''}
+      ${tool.id === 'pdf-to-word' && outputs.length === 1 ? `<button class="btn btn-ghost" id="to-editor" type="button">${icon('edit', 18)} Edit it in Sheaf</button>` : ''}
       <div class="row center">
         <a class="btn btn-ghost" href="#/${tool.id}" id="again">${icon('rotateLeft', 16)} Start over</a>
         <a class="btn btn-ghost" href="#/">All tools</a>
       </div>
     </section>`);
   $('#again').addEventListener('click', (e) => { e.preventDefault(); openTool(tool); });
+  $('#to-editor')?.addEventListener('click', () => {
+    handoff = new File([file.blob], file.name, { type: file.blob.type });
+    location.hash = '#/word-edit';
+  });
   if (isNativeApp) {
     $('#dl').addEventListener('click', async (e) => {
       e.preventDefault();
@@ -729,6 +754,25 @@ async function done(outputs, summary, preview) {
 
 let lastUrl = null;
 
+/** Hands a file the Word editor saved to the person: a download, or Documents/Sheaf in the app. */
+async function saveOut({ name, blob }) {
+  if (isNativeApp) {
+    try { toast(`Saved to ${await saveToDevice(blob, name)}`, 'info'); }
+    catch { toast('Could not save to Documents.'); }
+    return;
+  }
+  const shareable = new File([blob], name, { type: blob.type });
+  // iOS home-screen apps have no downloads, so offer the share sheet there.
+  if (isIOS && isStandalone() && canShareFile(shareable)) {
+    return navigator.share({ files: [shareable], title: name }).catch(() => {});
+  }
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), { href: url, download: name });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  toast(`${name} downloaded`, 'info');
+}
+
 const doneTitle = (t) => ({
   merge: 'Your PDFs are merged', split: 'Your PDF is split', remove: 'Pages removed', extract: 'Pages extracted',
   organize: 'Your PDF is reorganized', scan: 'Your scan is ready', compress: 'Your PDF is compressed', repair: 'Your PDF is repaired',
@@ -736,11 +780,19 @@ const doneTitle = (t) => ({
   edit: 'Your edits are saved', rotate: 'Your PDF is rotated', 'page-numbers': 'Page numbers added', watermark: 'Watermark added',
   ocr: 'Your text is readable now', 'pdf-to-word': 'Your Word file is ready', 'pdf-to-excel': 'Your spreadsheet is ready',
   'pdf-to-powerpoint': 'Your slides are ready', summarize: 'Here is the short version', translate: 'Your translation is ready',
-  crop: 'Your PDF is cropped', sign: 'Your PDF is signed', protect: 'Your PDF is locked', unlock: 'Your PDF is unlocked', redact: 'Your PDF is redacted',
+  crop: 'Your PDF is cropped', 'word-convert': 'Your documents are converted', sign: 'Your PDF is signed', protect: 'Your PDF is locked', unlock: 'Your PDF is unlocked', redact: 'Your PDF is redacted',
 }[t.id] || 'All done');
 
 /* ----------------------------------------------------------------- router */
+let currentHash = location.hash;
 function route() {
+  // Leaving the Word editor with unsaved changes throws them away, so ask first.
+  if (session?.word?.dirty() && location.hash !== currentHash && !confirm('Your document has changes you have not saved. Leave anyway?')) {
+    history.replaceState(null, '', currentHash || '#/');
+    return;
+  }
+  currentHash = location.hash;
+  session?.word?.destroy();
   document.querySelectorAll('dialog,.busy-overlay').forEach((n) => n.remove());
   const id = location.hash.replace(/^#\/?/, '');
   if (byId[id]) openTool(byId[id]); else home();
@@ -759,6 +811,8 @@ window.addEventListener('drop', (e) => {
   e.preventDefault();
   if (session && !session.result) addFiles([...e.dataTransfer.files]);
 });
+
+window.addEventListener('beforeunload', (e) => { if (session?.word?.dirty()) { e.preventDefault(); e.returnValue = ''; } });
 
 // Exposed so the canvas editor can re-check the loaded document.
 export { loadPdf };

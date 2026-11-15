@@ -2,7 +2,7 @@
 
 PDF tools that run entirely in the browser. Nothing is uploaded: files are read, changed and saved on the device. There's no server and no Docker, just a static site.
 
-For Word, Excel, PowerPoint and HTML to PDF, PDF/A and chained workflows, which need real software behind them, use [Sheaf-D](../sheaf-D/), the Docker version.
+For Excel, PowerPoint and HTML to PDF, PDF/A and chained workflows, which need real software behind them, use [Sheaf-D](../sheaf-D/), the Docker version.
 
 ## Tools
 
@@ -11,6 +11,7 @@ For Word, Excel, PowerPoint and HTML to PDF, PDF/A and chained workflows, which 
 | Organize | Merge, Split, Remove pages, Extract pages, Organize, Scan to PDF |
 | Optimize | Compress, Repair, OCR |
 | Convert | JPG to PDF, PDF to JPG, PDF to Word, PDF to Excel, PDF to PowerPoint, PDF to Markdown / text |
+| Word | Edit Word (a full word processor), Convert Word (to PDF, DOCX, ODT, RTF, HTML, Markdown, text) |
 | Edit | Edit (change existing text, add text, images, shapes, drawing, highlights in six colours or any custom colour, white out), Rotate, Page numbers, Watermark, Crop |
 | Security | Sign, Protect (AES-256), Unlock, Redact, Compare |
 | Read & translate | Summarize, Translate |
@@ -51,6 +52,19 @@ To use it from your other devices over Tailscale, `npm run serve` builds it and 
 - `scripts/copy-ocr.mjs` copies Tesseract and its language data into `public/ocr` before `dev` and `build`, so OCR never fetches anything from a CDN.
 - `src/main.js` is the shell: routing, upload, the options panel, file and page grids, the result screen.
 - `src/editor.js` is the page editor behind Edit, Sign, Redact and Crop.
+- `src/wordedit.js` is the Edit Word screen, and `src/lib/wordcraft.js` talks to the WordCraft frame (open a file, take saves, run commands such as Export as PDF).
+
+## Word documents
+
+Edit Word and Convert Word are [WordCraft](https://github.com/storytold/wordcraft), an open source word processor written in Rust, built for the browser and kept in `public/wordcraft`. It runs in a frame inside Sheaf and never sends the document anywhere.
+
+- **Edit Word** opens .docx, .doc, .odt, .rtf, .md, .txt and .html files, or starts a blank document. WordCraft brings its own ribbon: styles, fonts, lists, tables, pictures and shapes, headers and footers, page setup, track changes and comments, find and replace, spelling. Save hands the file back to Sheaf, which downloads it (in the Android app it goes to Documents/Sheaf). PDF exports a PDF with real, selectable text.
+- **Convert Word** runs the same editor out of sight: it opens each file and saves it in the format you pick.
+- After **PDF to Word**, the result screen has an **Edit it in Sheaf** button that opens the new .docx in the editor.
+- The editor draws with WebGPU, or WebGL2 where WebGPU is missing, so it needs a browser from the last few years. On phones it starts on WebGL2, which is the more reliable of the two there.
+- The first open downloads the editor (about 18 MB over the network, 52 MB unpacked). After that the browser keeps a copy, and the installed app works offline.
+
+To move to a newer WordCraft, change `WORDCRAFT_REV` in `scripts/build-wordcraft.sh` and run it. It needs Rust with the `wasm32-unknown-unknown` target and `trunk` (`cargo install trunk --locked`). WordCraft is MIT OR Apache-2.0; its licence files and NOTICE ship in `public/wordcraft`.
 
 ## Phones, tablets and computers
 
@@ -95,7 +109,7 @@ Phones have far less memory than computers, and iOS caps each browser tab. Sheaf
 
 ## Android app
 
-There's an APK on the repo's Releases page. It's this same app wrapped with [Capacitor](https://capacitorjs.com), so every tool runs on the phone and works offline. Results go to `Documents/Sheaf` when you tap Save, or anywhere through Share. DeepL translation isn't available in the APK because there's no relay server behind it; the on-device translator still works.
+There's an APK on the repo's Releases page. It's this same app wrapped with [Capacitor](https://capacitorjs.com), so every tool runs on the phone and works offline. Results go to `Documents/Sheaf` when you tap Save, or anywhere through Share. DeepL translation isn't available in the APK because there's no relay server behind it; the on-device translator still works. The Word editor ships inside the APK, which makes it about 20 MB bigger.
 
 To cut a new release, push a tag and the `Sheaf Android` workflow builds and uploads the APK:
 

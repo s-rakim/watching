@@ -1,3 +1,5 @@
+import { WORD_ACCEPT } from './lib/wordcraft.js';
+
 // Every tool the app offers. `mode` picks the workspace, `fields` builds the options panel.
 export const CATEGORIES = [
   { id: 'all', label: 'All tools' },
@@ -5,6 +7,7 @@ export const CATEGORIES = [
   { id: 'optimize', label: 'Optimize' },
   { id: 'convert', label: 'Convert' },
   { id: 'edit', label: 'Edit' },
+  { id: 'word', label: 'Word' },
   { id: 'security', label: 'Security' },
   { id: 'smart', label: 'Read & translate' },
 ];
@@ -13,6 +16,8 @@ export const CATEGORIES = [
 const PDF = 'application/pdf,.pdf';
 const LANG_OPTIONS = [['en', 'English'], ['es', 'Spanish'], ['fr', 'French'], ['de', 'German'], ['it', 'Italian'], ['pt', 'Portuguese'], ['nl', 'Dutch'], ['pl', 'Polish'],
   ['ru', 'Russian'], ['uk', 'Ukrainian'], ['tr', 'Turkish'], ['ar', 'Arabic'], ['hi', 'Hindi'], ['zh', 'Chinese'], ['ja', 'Japanese'], ['ko', 'Korean'], ['sv', 'Swedish'], ['vi', 'Vietnamese']];
+// Word, OpenDocument, RTF, Markdown, HTML and plain text: everything the Word editor opens.
+const WORD = WORD_ACCEPT;
 const IMG = 'image/jpeg,image/png,image/webp,image/gif,image/bmp';
 
 export const TOOLS = [
@@ -136,6 +141,19 @@ export const TOOLS = [
     id: 'edit', title: 'Edit PDF', cat: 'edit', icon: 'edit', hue: 'pink',
     desc: 'Change the text already on a page, add new text, images and shapes, draw, highlight or white out.',
     mode: 'canvas', accept: PDF, action: 'Save PDF', palette: ['edittext', 'text', 'image', 'ink', 'highlight', 'rect', 'whiteout'],
+  },
+  {
+    id: 'word-edit', title: 'Edit Word', cat: 'word', icon: 'fileWord', hue: 'blue',
+    desc: 'Open a Word document and work on it in a full word processor: styles, tables, track changes, comments, headers and page layout.',
+    mode: 'word', accept: WORD, action: 'Open', blank: true,
+  },
+  {
+    id: 'word-convert', title: 'Convert Word', cat: 'word', icon: 'fileOutput', hue: 'blue',
+    desc: 'Turn Word documents into PDF, or between DOCX, ODT, RTF, HTML, Markdown and plain text.',
+    mode: 'files', accept: WORD, multiple: true, action: 'Convert', busy: 'Converting your documents…', docs: true,
+    fields: [
+      { key: 'format', label: 'Convert to', type: 'select', default: 'pdf', options: [['pdf', 'PDF'], ['docx', 'Word (.docx)'], ['odt', 'OpenDocument (.odt)'], ['rtf', 'Rich Text (.rtf)'], ['html', 'Web page (.html)'], ['md', 'Markdown (.md)'], ['txt', 'Plain text (.txt)']] },
+    ],
   },
   {
     id: 'rotate', title: 'Rotate PDF', cat: 'edit', icon: 'rotate', hue: 'pink',
